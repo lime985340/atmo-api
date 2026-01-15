@@ -1,0 +1,7 @@
+.git
+.gitlab
+**/build
+**/.gradle
+**/.idea
+**/*.iml
+local/
