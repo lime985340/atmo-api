@@ -1,2 +1,9 @@
 rootProject.name = "atmos-backend"
-include(":common", ":domain", ":application", ":infra", ":api", ":ingestion")
+include(
+    ":common",
+    ":domain",
+    ":application",
+    ":infra",
+    ":api",
+    ":ingestion"
+)
