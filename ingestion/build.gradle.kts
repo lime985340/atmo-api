@@ -5,8 +5,8 @@ dependencies {
   implementation(project(":domain"))
   implementation(project(":application"))
   implementation(project(":infra"))
-  implementation("org.springframework.boot: spring-boot-starter")
-  implementation("org.springframework.boot: spring-boot-starter-webflux")
-  implementation("com.fasterxml.jackson.module: jackson-module-kotlin")
-  runtimeOnly("org.postgresql: postgresql")
+  implementation("org.springframework.boot:spring-boot-starter")
+  implementation("org.springframework.boot:spring-boot-starter-webflux")
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+  runtimeOnly("org.postgresql:postgresql")
 }

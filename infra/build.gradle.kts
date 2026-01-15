@@ -12,8 +12,8 @@ dependencies {
   implementation(project(":common"))
   implementation(project(":domain"))
   implementation(project(":application"))
-  implementation("org.springframework.boot: spring-boot-starter-data-jpa")
-  runtimeOnly("org.postgresql: postgresql")
+  implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+  runtimeOnly("org.postgresql:postgresql")
   implementation(kotlin("stdlib"))
 }
 
