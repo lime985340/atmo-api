@@ -15,7 +15,7 @@ allprojects {
 subprojects {
     apply(plugin = "com.diffplug.spotless")
 
-    spotless {
+    configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         kotlin {
             target("**/*.kt")
             ktlint("0.50.0").userData(mapOf("indent_size" to "4"))
