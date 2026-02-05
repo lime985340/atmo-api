@@ -7,6 +7,7 @@ import lime.atmos.application.usecase.GetDashboardUseCase
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.boot.runApplication
+import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 
@@ -16,6 +17,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 // Spring Boot's default component/JPA scanning would miss those packages, which leads to
 // missing beans like `UserPort` and missing JPA repositories.
 @SpringBootApplication(scanBasePackages = ["lime.atmos"])
+@EnableCaching
 @EnableJpaRepositories(basePackages = ["lime.atmos.infra.jpa.repo"])
 @EntityScan(basePackages = ["lime.atmos.infra.jpa.entity"])
 class ApiApplication {
@@ -24,7 +26,7 @@ class ApiApplication {
     fun getDashboardUseCase(
         locationPort: LocationPort,
         weatherReadPort: WeatherReadPort,
-        airReadPort: AirReadPort
+        airReadPort: AirReadPort,
     ) = GetDashboardUseCase(locationPort, weatherReadPort, airReadPort)
 }
 

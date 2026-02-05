@@ -8,7 +8,7 @@ data class WeatherNow(
     val humidity: Double?,
     val windSpeed: Double?,
     val precipType: String?,
-    val precipMm: Double?
+    val precipMm: Double?,
 )
 
 data class WeatherHour(
@@ -19,7 +19,7 @@ data class WeatherHour(
     val pop: Double?,
     val sky: String?,
     val precipType: String?,
-    val precipMm: Double?
+    val precipMm: Double?,
 )
 
 data class AirNow(
@@ -28,13 +28,13 @@ data class AirNow(
     val pm10: Double?,
     val pm25: Double?,
     val o3: Double?,
-    val grade: String?
+    val grade: Int?,
 )
 
 data class AdviceItem(
     val type: String,
     val level: String,
-    val message: String
+    val message: String,
 )
 
 data class Dashboard(
@@ -45,5 +45,5 @@ data class Dashboard(
     val airNow: AirNow?,
     val advice: List<AdviceItem>,
     val dataUpdatedAt: Instant,
-    val isStale: Boolean
+    val isStale: Boolean,
 )

@@ -14,7 +14,7 @@ import java.util.UUID
 
 data class TokenPair(
     val accessToken: String,
-    val refreshToken: String
+    val refreshToken: String,
 )
 
 @Service
@@ -25,7 +25,7 @@ class OAuthService(
     private val jwt: JwtService,
     private val tokenHash: TokenHash,
     private val refreshRepo: RefreshTokenRepository,
-    private val userRepo: AppUserRepository
+    private val userRepo: AppUserRepository,
 ) {
     fun authorizeUrl(providerKey: String, state: String): String {
         val p = provider(providerKey)
@@ -45,7 +45,7 @@ class OAuthService(
         providerKey: String,
         code: String,
         userAgent: String?,
-        ip: String?
+        ip: String?,
     ): TokenPair {
         val p = provider(providerKey)
 
@@ -74,8 +74,8 @@ class OAuthService(
                 issuedAt = Instant.now(),
                 expiresAt = Instant.now().plusSeconds(60L * 60 * 24 * 30),
                 userAgent = userAgent,
-                ip = ip
-            )
+                ip = ip,
+            ),
         )
         return TokenPair(ourAccess, ourRefresh)
     }
@@ -85,12 +85,12 @@ class OAuthService(
 
     private fun mapUser(
         providerKey: String,
-        json: com.fasterxml.jackson.databind.JsonNode
+        json: com.fasterxml.jackson.databind.JsonNode,
     ): Triple<String, String?, String?> = when (providerKey.lowercase()) {
         "google" -> Triple(
             json["sub"]?.asText() ?: error("google sub missing"),
             json["email"]?.asText(),
-            json["name"]?.asText()
+            json["name"]?.asText(),
         )
 
         "naver" -> {
@@ -98,7 +98,7 @@ class OAuthService(
             Triple(
                 res["id"]?.asText() ?: error("naver id missing"),
                 res["email"]?.asText(),
-                res["name"]?.asText()
+                res["name"]?.asText(),
             )
         }
 

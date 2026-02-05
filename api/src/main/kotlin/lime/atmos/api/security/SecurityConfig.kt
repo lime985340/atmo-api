@@ -23,13 +23,15 @@ class SecurityConfig(private val jwtService: JwtService) {
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/api/v1/dashboard",
-                    "/api/v1/auth/**"
+                    "/api/v1/auth/**",
+                    "/api/v1/stations/**",
+                    "/api/v1/map/**",
                 ).permitAll()
                 it.anyRequest().authenticated()
             }
             .addFilterBefore(
                 JwtAuthenticationFilter(jwtService),
-                UsernamePasswordAuthenticationFilter::class.java
+                UsernamePasswordAuthenticationFilter::class.java,
             )
 
         return http.build()

@@ -1,13 +1,16 @@
 package lime.atmos.application.port
 
-import lime.atmos.domain.model.*
+import lime.atmos.domain.model.AirNow
+import lime.atmos.domain.model.WeatherHour
+import lime.atmos.domain.model.WeatherNow
 import java.time.Instant
 import java.util.UUID
 
 data class LocationDto(
     val id: Long,
     val name: String,
-    val stationName: String
+    val stationId: Long?,
+    val stationName: String?,
 )
 
 interface LocationPort {
@@ -15,20 +18,29 @@ interface LocationPort {
 }
 
 interface WeatherReadPort {
-    fun getWeatherNow(locationId: Long): WeatherNow?
-    fun getNextHours(locationId: Long, from: Instant, to: Instant): List<WeatherHour>
-    fun getLatestUpdateTime(locationId: Long): Instant?
+    fun getWeatherNow(stationId: Long): WeatherNow?
+    fun getNextHours(stationId: Long, from: Instant, to: Instant): List<WeatherHour>
+    fun getLatestUpdateTime(stationId: Long): Instant?
 }
 
 interface AirReadPort {
-    fun getAirNow(stationName: String): AirNow?
-    fun getLatestUpdateTime(stationName: String): Instant?
+    fun getAirNow(stationId: Long): AirNow?
+    fun getLatestUpdateTime(stationId: Long): Instant?
 }
 
+data class FavoriteLocationDto(
+    val id: Long,
+    val name: String,
+    val lat: Double,
+    val lng: Double,
+    val stationId: Long?,
+    val stationName: String?,
+)
+
 interface FavoritePort {
-    fun listFavorites(userId: UUID): List<Long>
-    fun addFavorite(userId: UUID, locationId: Long)
-    fun removeFavorite(userId: UUID, locationId: Long)
+    fun listFavorites(userId: UUID): List<FavoriteLocationDto>
+    fun createFavorite(userId: UUID, name: String, lat: Double, lng: Double): FavoriteLocationDto
+    fun removeFavorite(userId: UUID, favoriteId: Long)
 }
 
 data class UserInfo(
@@ -36,16 +48,16 @@ data class UserInfo(
     val provider: String,
     val providerSubject: String,
     val email: String?,
-    val name: String?
+    val name: String?,
 )
 
 interface UserPort {
     fun findById(userId: UUID): UserInfo?
-    
+
     fun findOrCreateByProvider(
-        provider: String, 
-        providerSubject: String, 
-        email: String?, 
-        name: String?
+        provider: String,
+        providerSubject: String,
+        email: String?,
+        name: String?,
     ): UserInfo
 }

@@ -1,17 +1,26 @@
 package lime.atmos.api.security
 
+import jakarta.validation.constraints.NotBlank
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 import org.springframework.validation.annotation.Validated
-import javax.validation.constraints.NotBlank
 
-@ConstructorBinding
+/**
+ * JWT 설정 Properties
+ *
+ * application.yml의 app.jwt 설정을 바인딩합니다.
+ */
 @ConfigurationProperties(prefix = "app.jwt")
 @Validated
 data class JwtProps(
-    val issuer: String,
-    @field:NotBlank val accessSecret: String,
-    @field:NotBlank val refreshSecret: String,
-    val accessTtlSeconds: Long,
-    val refreshTtlSeconds: Long
+    @field:NotBlank
+    val accessSecret: String,
+
+    @field:NotBlank
+    val refreshSecret: String,
+
+    val issuer: String = "atmos",
+
+    val accessTtlSeconds: Long = 900, // 15분
+
+    val refreshTtlSeconds: Long = 2592000, // 30일
 )

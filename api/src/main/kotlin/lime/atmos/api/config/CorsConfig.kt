@@ -6,13 +6,12 @@ import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.filter.CorsFilter
 
-
 @Configuration
 class CorsConfig(
     // Comma-separated origins, e.g. "https://app.example.com, http://localhost: 5173"
     // If empty, allow all origins via allowedOriginPatterns (works with allowCredentials = true).
     @Value("\${app.cors.allowed-origins:}")
-    private val allowedOriginsCsv: String
+    private val allowedOriginsCsv: String,
 ) {
 
     @Bean

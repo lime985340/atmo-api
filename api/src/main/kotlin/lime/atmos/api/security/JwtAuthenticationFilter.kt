@@ -8,17 +8,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
-import java.util.UUID
 
 class JwtAuthenticationFilter(
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
 ) : OncePerRequestFilter() {
     private val log = LoggerFactory.getLogger(JwtAuthenticationFilter::class.java)
 
     override fun doFilterInternal(
         req: HttpServletRequest,
         res: HttpServletResponse,
-        chain: FilterChain
+        chain: FilterChain,
     ) {
         val h = req.getHeader("Authorization") ?: ""
         if (!h.startsWith("Bearer ")) {
@@ -33,7 +32,7 @@ class JwtAuthenticationFilter(
             SecurityContextHolder.getContext().authentication = UsernamePasswordAuthenticationToken(
                 userId,
                 null,
-                listOf(SimpleGrantedAuthority("ROLE_USER"))
+                listOf(SimpleGrantedAuthority("ROLE_USER")),
             )
         } else {
             log.debug("Invalid or expired access token provided")

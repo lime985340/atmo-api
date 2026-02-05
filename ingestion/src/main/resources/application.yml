@@ -1,8 +1,7 @@
 spring:
   application:
-    name: atmos-ingestion
+    name: atmo-ingestion
   config:
-    # [FILE] k8s에서는 /etc/secrets 아래 파일을 설정으로 로드(configtree). 로컬에 없으면 optional이라 무시됨.
     import: "${SPRING_CONFIG_IMPORT:optional:configtree:/etc/secrets/}"
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/app}
@@ -11,10 +10,19 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
   flyway:
     enabled: true
     locations: classpath:db/migration
+
 app:
-  ingest:
-    kma-service-key: ${KMA_SERVICE_KEY:}
-    air-service-key: ${AIR_SERVICE_KEY:}
+  forecast:
+    retention-days: ${APP_FORECAST_RETENTION_DAYS:2}
+  external:
+    publicdata:
+      service-key: ${APP_PUBLICDATA_SERVICE_KEY:${app.external.publicdata.kma.service-key:}}
+      airkorea:
+        service-key: ${app.external.publicdata.airkorea.service-key:}
+      kma:
+        service-key: ${app.external.publicdata.kma.service-key:}

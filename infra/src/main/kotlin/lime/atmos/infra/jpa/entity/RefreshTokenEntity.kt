@@ -1,11 +1,17 @@
 package lime.atmos.infra.jpa.entity
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
 
 @Entity
-@Table(name = "user_refresh_token")
+@Table(name = "user_refresh_tokens")
 class RefreshTokenEntity(
     @Id
     var id: UUID = UUID.randomUUID(),
@@ -30,5 +36,5 @@ class RefreshTokenEntity(
     var userAgent: String? = null,
 
     @Column(name = "ip")
-    var ip: String? = null
+    var ip: String? = null,
 )
