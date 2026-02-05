@@ -1,4 +1,4 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
 import org.springframework.core.io.ClassPathResource
 import org.springframework.http.MediaType

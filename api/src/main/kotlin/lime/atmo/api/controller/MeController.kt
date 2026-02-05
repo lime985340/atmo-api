@@ -1,6 +1,6 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
-import lime.atmos.application.port.UserPort
+import lime.atmo.application.port.UserPort
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping

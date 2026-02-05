@@ -1,10 +1,10 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import lime.atmos.infra.jpa.repo.AirCurrentRepo
-import lime.atmos.infra.jpa.repo.StationRepo
-import lime.atmos.infra.jpa.repo.StationWeatherCurrentRepo
+import lime.atmo.infra.jpa.repo.AirCurrentRepo
+import lime.atmo.infra.jpa.repo.StationRepo
+import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
