@@ -1,4 +1,4 @@
-package lime.atmos.infra.jpa.entity
+package lime.atmo.infra.jpa.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
