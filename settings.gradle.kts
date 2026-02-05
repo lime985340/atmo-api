@@ -1,4 +1,4 @@
-rootProject.name = "atmos-backend"
+rootProject.name = "atmo-backend"
 include(
     ":common",
     ":domain",

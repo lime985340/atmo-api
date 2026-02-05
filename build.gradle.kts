@@ -8,7 +8,7 @@ plugins {
 }
 
 allprojects {
-    group = "lime.atmos"
+    group = "lime.atmo"
     version = "0.2.0"
     repositories {
         mavenCentral()
