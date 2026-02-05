@@ -1,4 +1,4 @@
-package lime.atmos.api.oauth
+package lime.atmo.api.oauth
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

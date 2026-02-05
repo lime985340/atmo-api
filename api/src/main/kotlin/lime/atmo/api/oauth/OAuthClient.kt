@@ -1,4 +1,4 @@
-package lime.atmos.api.oauth
+package lime.atmo.api.oauth
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
