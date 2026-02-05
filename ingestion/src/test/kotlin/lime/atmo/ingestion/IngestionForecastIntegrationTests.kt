@@ -1,10 +1,10 @@
-package lime.atmos.ingestion
+package lime.atmo.ingestion
 
-import lime.atmos.infra.jpa.entity.StationEntity
-import lime.atmos.infra.jpa.repo.StationRepo
-import lime.atmos.infra.jpa.repo.WeatherForecastRepo
-import lime.atmos.ingestion.kma.KmaFcstItem
-import lime.atmos.ingestion.kma.KmaForecastClient
+import lime.atmo.infra.jpa.entity.StationEntity
+import lime.atmo.infra.jpa.repo.StationRepo
+import lime.atmo.infra.jpa.repo.WeatherForecastRepo
+import lime.atmo.ingestion.kma.KmaFcstItem
+import lime.atmo.ingestion.kma.KmaForecastClient
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
