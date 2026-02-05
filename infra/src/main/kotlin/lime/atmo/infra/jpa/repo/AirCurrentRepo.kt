@@ -1,6 +1,6 @@
-package lime.atmos.infra.jpa.repo
+package lime.atmo.infra.jpa.repo
 
-import lime.atmos.infra.jpa.entity.AirCurrentEntity
+import lime.atmo.infra.jpa.entity.AirCurrentEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 
