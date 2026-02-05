@@ -1,4 +1,4 @@
-package lime.atmos.domain.model
+package lime.atmo.domain.model
 
 import java.time.Instant
 
