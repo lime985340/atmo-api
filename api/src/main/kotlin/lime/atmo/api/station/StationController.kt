@@ -1,10 +1,10 @@
-package lime.atmos.api.station
+package lime.atmo.api.station
 
-import lime.atmos.application.port.WeatherReadPort
-import lime.atmos.domain.model.WeatherHour
-import lime.atmos.infra.jpa.repo.AirCurrentRepo
-import lime.atmos.infra.jpa.repo.StationRepo
-import lime.atmos.infra.jpa.repo.StationWeatherCurrentRepo
+import lime.atmo.application.port.WeatherReadPort
+import lime.atmo.domain.model.WeatherHour
+import lime.atmo.infra.jpa.repo.AirCurrentRepo
+import lime.atmo.infra.jpa.repo.StationRepo
+import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
