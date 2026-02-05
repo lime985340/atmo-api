@@ -1,4 +1,4 @@
-package lime.atmos.common.config
+package lime.atmo.common.config
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
