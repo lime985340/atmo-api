@@ -3,6 +3,8 @@ spring:
     name: atmo-ingestion
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configtree:/etc/secrets/}"
+  main:
+    web-application-type: none
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/app}
     username: ${SPRING_DATASOURCE_USERNAME:app}
