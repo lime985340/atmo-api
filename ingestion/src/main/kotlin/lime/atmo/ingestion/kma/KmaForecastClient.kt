@@ -1,6 +1,6 @@
-package lime.atmos.ingestion.kma
+package lime.atmo.ingestion.kma
 
-import lime.atmos.common.config.PublicDataProps
+import lime.atmo.common.config.PublicDataProps
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component

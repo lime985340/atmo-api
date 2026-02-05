@@ -1,4 +1,4 @@
-package lime.atmos.ingestion.kma
+package lime.atmo.ingestion.kma
 
 import kotlin.math.cos
 import kotlin.math.floor
