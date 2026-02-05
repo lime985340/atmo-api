@@ -1,7 +1,7 @@
-package lime.atmos.infra.jpa.repo
+package lime.atmo.infra.jpa.repo
 
-import lime.atmos.infra.jpa.entity.AppUserEntity
-import lime.atmos.infra.jpa.entity.RefreshTokenEntity
+import lime.atmo.infra.jpa.entity.AppUserEntity
+import lime.atmo.infra.jpa.entity.RefreshTokenEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
