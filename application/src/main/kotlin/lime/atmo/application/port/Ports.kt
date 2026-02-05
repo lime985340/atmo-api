@@ -1,8 +1,8 @@
-package lime.atmos.application.port
+package lime.atmo.application.port
 
-import lime.atmos.domain.model.AirNow
-import lime.atmos.domain.model.WeatherHour
-import lime.atmos.domain.model.WeatherNow
+import lime.atmo.domain.model.AirNow
+import lime.atmo.domain.model.WeatherHour
+import lime.atmo.domain.model.WeatherNow
 import java.time.Instant
 import java.util.UUID
 

@@ -1,10 +1,10 @@
-package lime.atmos.application.usecase
+package lime.atmo.application.usecase
 
-import lime.atmos.application.port.AirReadPort
-import lime.atmos.application.port.LocationPort
-import lime.atmos.application.port.WeatherReadPort
-import lime.atmos.domain.model.AdviceItem
-import lime.atmos.domain.model.Dashboard
+import lime.atmo.application.port.AirReadPort
+import lime.atmo.application.port.LocationPort
+import lime.atmo.application.port.WeatherReadPort
+import lime.atmo.domain.model.AdviceItem
+import lime.atmo.domain.model.Dashboard
 import java.time.Duration
 import java.time.Instant
 
