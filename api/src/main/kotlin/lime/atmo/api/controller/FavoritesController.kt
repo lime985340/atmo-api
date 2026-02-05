@@ -1,12 +1,12 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import lime.atmos.application.port.FavoritePort
-import lime.atmos.application.port.WeatherReadPort
-import lime.atmos.domain.model.WeatherHour
-import lime.atmos.infra.jpa.repo.AirCurrentRepo
-import lime.atmos.infra.jpa.repo.StationWeatherCurrentRepo
+import lime.atmo.application.port.FavoritePort
+import lime.atmo.application.port.WeatherReadPort
+import lime.atmo.domain.model.WeatherHour
+import lime.atmo.infra.jpa.repo.AirCurrentRepo
+import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication

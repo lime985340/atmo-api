@@ -1,12 +1,12 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import lime.atmos.api.oauth.OAuthService
-import lime.atmos.api.security.JwtService
-import lime.atmos.api.security.TokenHash
-import lime.atmos.infra.jpa.entity.RefreshTokenEntity
-import lime.atmos.infra.jpa.repo.RefreshTokenRepository
+import lime.atmo.api.oauth.OAuthService
+import lime.atmo.api.security.JwtService
+import lime.atmo.api.security.TokenHash
+import lime.atmo.infra.jpa.entity.RefreshTokenEntity
+import lime.atmo.infra.jpa.repo.RefreshTokenRepository
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable

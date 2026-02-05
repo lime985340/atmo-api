@@ -1,6 +1,6 @@
-package lime.atmos.api.controller
+package lime.atmo.api.controller
 
-import lime.atmos.application.usecase.GetDashboardUseCase
+import lime.atmo.application.usecase.GetDashboardUseCase
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
