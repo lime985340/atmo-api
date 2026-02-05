@@ -2,13 +2,15 @@ package lime.atmos.api.controller
 
 import lime.atmos.application.port.UserPort
 import org.springframework.security.core.Authentication
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1")
 class MeController(
-    private val users: UserPort
+    private val users: UserPort,
 ) {
     @GetMapping("/me")
     fun me(auth: Authentication?): Any {
@@ -20,7 +22,7 @@ class MeController(
             "id" to u.id,
             "provider" to u.provider,
             "email" to u.email,
-            "name" to u.name
+            "name" to u.name,
         )
     }
 }
