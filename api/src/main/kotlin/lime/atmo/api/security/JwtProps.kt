@@ -1,4 +1,4 @@
-package lime.atmos.api.security
+package lime.atmo.api.security
 
 import jakarta.validation.constraints.NotBlank
 import org.springframework.boot.context.properties.ConfigurationProperties

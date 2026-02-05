@@ -1,4 +1,4 @@
-package lime.atmos.api.security
+package lime.atmo.api.security
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys

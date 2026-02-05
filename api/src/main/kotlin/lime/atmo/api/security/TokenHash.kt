@@ -1,4 +1,4 @@
-package lime.atmos.api.security
+package lime.atmo.api.security
 import org.springframework.stereotype.Component
 import java.security.MessageDigest
 import java.util.Base64

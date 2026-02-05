@@ -1,4 +1,4 @@
-package lime.atmos.api.security
+package lime.atmo.api.security
 
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest

@@ -1,4 +1,4 @@
-package lime.atmos.api.security
+package lime.atmo.api.security
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
