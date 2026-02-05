@@ -1,18 +1,22 @@
 package lime.atmos.infra.jpa.entity
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import java.time.Instant
 import java.util.UUID
 
 @Entity
 @Table(
-    name = "app_user",
+    name = "app_users",
     uniqueConstraints = [
         UniqueConstraint(
             name = "uq_user_provider_sub",
-            columnNames = ["provider", "provider_subject"]
-        )
-    ]
+            columnNames = ["provider", "provider_subject"],
+        ),
+    ],
 )
 class AppUserEntity(
     @Id
@@ -32,5 +36,5 @@ class AppUserEntity(
     var createdAt: Instant = Instant.now(),
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: Instant = Instant.now()
+    var updatedAt: Instant = Instant.now(),
 )
