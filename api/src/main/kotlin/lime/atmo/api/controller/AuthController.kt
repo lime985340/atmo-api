@@ -64,12 +64,12 @@ class AuthController(
         if (returnTo != null) {
             res.addHeader(
                 "Set-Cookie",
-                "refresh_token=${'$'}{pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${'$'}{60 * 60 * 24 * 30}",
+                "refresh_token=${pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
             )
             val redirectUrl = if (returnTo.contains("#")) {
-                "${'$'}returnTo&access_token=${'$'}{pair.accessToken}"
+                "${returnTo}&access_token=${pair.accessToken}"
             } else {
-                "${'$'}returnTo#access_token=${'$'}{pair.accessToken}"
+                "${returnTo}#access_token=${pair.accessToken}"
             }
             return ResponseEntity.status(302).header("Location", redirectUrl).build()
         }
@@ -131,7 +131,7 @@ class AuthController(
             // Path is restricted to refresh endpoint to reduce exposure.
             res.addHeader(
                 "Set-Cookie",
-                "refresh_token=${'$'}newRefresh; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${'$'}{60 * 60 * 24 * 30}",
+                "refresh_token=$newRefresh; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
             )
             ResponseEntity.ok(mapOf("accessToken" to access))
         } else {
