@@ -31,23 +31,28 @@ class WebKmaForecastClient(
     override fun fetchUltraSrtFcst(nx: Int, ny: Int, baseDate: String, baseTime: String): List<KmaFcstItem> {
         if (props.serviceKey.isBlank()) return emptyList()
 
-        val res = client.get()
-            .uri { b ->
-                b.path("/getUltraSrtFcst")
-                    .queryParam("serviceKey", props.serviceKey)
-                    .queryParam("pageNo", 1)
-                    .queryParam("numOfRows", 1000)
-                    .queryParam("dataType", "JSON")
-                    .queryParam("base_date", baseDate)
-                    .queryParam("base_time", baseTime)
-                    .queryParam("nx", nx)
-                    .queryParam("ny", ny)
-                    .build()
-            }
-            .accept(MediaType.APPLICATION_JSON)
-            .retrieve()
-            .bodyToMono(Map::class.java)
-            .block()
+        val res = KmaRetry.call(
+            log = log,
+            op = "getUltraSrtFcst(nx=$nx, ny=$ny, base=$baseDate $baseTime)",
+        ) {
+            client.get()
+                .uri { b ->
+                    b.path("/getUltraSrtFcst")
+                        .queryParam("serviceKey", props.serviceKey)
+                        .queryParam("pageNo", 1)
+                        .queryParam("numOfRows", 1000)
+                        .queryParam("dataType", "JSON")
+                        .queryParam("base_date", baseDate)
+                        .queryParam("base_time", baseTime)
+                        .queryParam("nx", nx)
+                        .queryParam("ny", ny)
+                        .build()
+                }
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .bodyToMono(Map::class.java)
+                .block()
+        }
 
         val items = (
             ((((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? Map<*, *>)?.get("item") as? List<*>)

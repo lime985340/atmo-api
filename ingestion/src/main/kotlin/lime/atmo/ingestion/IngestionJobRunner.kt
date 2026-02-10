@@ -29,15 +29,17 @@ class IngestionJobRunner(
 
         val exitCode = try {
             when (normalized) {
-                "seed" -> runner.seedStationsIfMissing()
+                "seed" -> runner.seedStationsIfMissing(force = true)
                 "hourly" -> {
                     runner.ingestAir()
+                    // ingestAir can create stations without coordinates; seed after AIR so WEATHER/FORECAST can resolve grids.
+                    runner.seedStationsIfMissing(force = false)
                     runner.ingestWeather()
                     runner.ingestForecast()
                 }
                 "cleanup" -> runner.cleanupForecasts()
                 "all" -> {
-                    runner.seedStationsIfMissing()
+                    runner.seedStationsIfMissing(force = true)
                     runner.ingestAir()
                     runner.ingestWeather()
                     runner.ingestForecast()

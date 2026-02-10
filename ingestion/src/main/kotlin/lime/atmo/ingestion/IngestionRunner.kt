@@ -19,6 +19,7 @@ import lime.atmo.infra.jpa.repo.WeatherObservationRepo
 import lime.atmo.ingestion.kma.GridConverter
 import lime.atmo.ingestion.kma.KmaFcstItem
 import lime.atmo.ingestion.kma.KmaForecastClient
+import lime.atmo.ingestion.kma.KmaRetry
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.http.MediaType
@@ -55,6 +56,8 @@ class IngestionRunner(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    private data class GridKey(val nx: Int, val ny: Int)
+
     /**
      * AirKorea - 대기오염정보 조회 서비스 (측정값)
      */
@@ -74,10 +77,23 @@ class IngestionRunner(
         .baseUrl("https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0")
         .build()
 
-    fun seedStationsIfMissing() {
+    fun seedStationsIfMissing(force: Boolean = false) {
         if (props.serviceKey.isBlank()) {
             log.warn("PublicData serviceKey is blank; skip station seeding.")
             return
+        }
+
+        if (!force) {
+            // Only run seed when we have stations that cannot be mapped to nx/ny at all (no nx/ny and no lat/lng).
+            val needsSeed = stationRepo.findAll()
+                .asSequence()
+                .filter { it.isActive }
+                .any { (it.nx == null || it.ny == null) && (it.lat == null || it.lng == null) }
+            if (!needsSeed) {
+                log.info("station seed skipped (no active stations missing coordinates)")
+                return
+            }
+            log.warn("station seed triggered by missing coordinates in active stations")
         }
 
         val run = runRepo.save(IngestionRunEntity(jobType = "STATION_SEED", status = "SUCCESS"))
@@ -292,101 +308,134 @@ class IngestionRunner(
 
         val run = runRepo.save(IngestionRunEntity(jobType = "WEATHER", status = "SUCCESS"))
         val started = Instant.now()
-        var ok = 0
-        var fail = 0
+        var okStations = 0
+        var failStations = 0
+        var kmaCallOk = 0
+        var kmaCallFail = 0
+        var obsInserted = 0
         var lastErr: String? = null
 
         val base = computeKmaBase(ZoneId.of("Asia/Seoul"))
 
         try {
             // v1 기본 UX: "측정소 마커"에서 날씨까지 같이 보여주기 위해, 측정소 좌표(nx,ny)를 기준으로 날씨를 적재한다.
+            // 운영 최적화: (nx,ny) 동일 격자 중복 호출 제거 후, 격자 1회 호출 결과를 해당 격자의 모든 station에 복제 저장한다.
             val stations = stationRepo.findAll().filter { it.isActive }
+            val stationsByGrid = mutableMapOf<GridKey, MutableList<StationEntity>>()
+            var missingCoords = 0
             for (st in stations) {
-                val (nx, ny) = when {
-                    st.nx != null && st.ny != null -> st.nx!! to st.ny!!
-                    st.lat != null && st.lng != null -> {
-                        val g = GridConverter.toGrid(st.lat!!, st.lng!!)
-                        st.nx = g.nx
-                        st.ny = g.ny
-                        stationRepo.save(st)
-                        g.nx to g.ny
-                    }
-                    else -> {
-                        fail++
-                        lastErr = "station ${st.id} missing nx/ny and lat/lng"
-                        continue
-                    }
+                val key = resolveGrid(st)
+                if (key == null) {
+                    missingCoords++
+                    lastErr = "station ${st.id} missing nx/ny and lat/lng"
+                    continue
                 }
-                val res = kmaClient.get()
-                    .uri { b ->
-                        b.path("/getUltraSrtNcst")
-                            .queryParam("serviceKey", props.serviceKey)
-                            .queryParam("pageNo", 1)
-                            .queryParam("numOfRows", 1000)
-                            .queryParam("dataType", "JSON")
-                            .queryParam("base_date", base.baseDate)
-                            .queryParam("base_time", base.baseTime)
-                            .queryParam("nx", nx)
-                            .queryParam("ny", ny)
-                            .build()
-                    }
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .bodyToMono(Map::class.java)
-                    .block()
-
-                val items = (
-                    ((((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? Map<*, *>)?.get("item") as? List<*>)
-                        ?: emptyList<Any>()
-                    )
-
-                val byCat = items.mapNotNull { it as? Map<*, *> }.associateBy { it["category"]?.toString().orEmpty() }
-                val obsDate = byCat["T1H"]?.get("baseDate")?.toString() ?: base.baseDate
-                val obsTime = byCat["T1H"]?.get("baseTime")?.toString() ?: base.baseTime
-                val obsInstant = parseKmaObs(obsDate, obsTime)
-
-                val tempC = byCat["T1H"]?.get("obsrValue")?.toString()?.toFloatOrNull()
-                val humidity = byCat["REH"]?.get("obsrValue")?.toString()?.toFloatOrNull()
-                val windSpeed = byCat["WSD"]?.get("obsrValue")?.toString()?.toFloatOrNull()
-                val precipMm = byCat["RN1"]?.get("obsrValue")?.toString()?.toFloatOrNull()
-
-                val existingObs = st.id?.let { weatherObservationRepo.findByStationIdAndObservedAt(it, obsInstant) }
-                if (existingObs == null && st.id != null) {
-                    weatherObservationRepo.save(
-                        WeatherObservationEntity(
-                            stationId = st.id!!,
-                            observedAt = obsInstant,
-                            temp = tempC,
-                            humidity = humidity,
-                            windSpeed = windSpeed,
-                            precip = precipMm,
-                            createdAt = Instant.now(),
-                        ),
-                    )
-                }
-                stationWeatherCurrentRepo.save(
-                    StationWeatherCurrentEntity(
-                        stationId = st.id,
-                        obsTime = "$obsDate $obsTime",
-                        temp = tempC?.toDouble(),
-                        rain = precipMm?.toDouble(),
-                        wind = windSpeed?.toDouble(),
-                        humidity = humidity?.toDouble(),
-                        updatedAt = Instant.now(),
-                    ),
-                )
-                ok++
+                stationsByGrid.getOrPut(key) { mutableListOf() }.add(st)
             }
+
+            for ((grid, gridStations) in stationsByGrid) {
+                val nx = grid.nx
+                val ny = grid.ny
+                try {
+                    val res = KmaRetry.call(
+                        log = log,
+                        op = "getUltraSrtNcst(nx=$nx, ny=$ny, base=${base.baseDate} ${base.baseTime})",
+                    ) {
+                        kmaClient.get()
+                            .uri { b ->
+                                b.path("/getUltraSrtNcst")
+                                    .queryParam("serviceKey", props.serviceKey)
+                                    .queryParam("pageNo", 1)
+                                    .queryParam("numOfRows", 1000)
+                                    .queryParam("dataType", "JSON")
+                                    .queryParam("base_date", base.baseDate)
+                                    .queryParam("base_time", base.baseTime)
+                                    .queryParam("nx", nx)
+                                    .queryParam("ny", ny)
+                                    .build()
+                            }
+                            .accept(MediaType.APPLICATION_JSON)
+                            .retrieve()
+                            .bodyToMono(Map::class.java)
+                            .block()
+                    }
+                    kmaCallOk++
+
+                    val items = (
+                        ((((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? Map<*, *>)?.get("item") as? List<*>)
+                            ?: emptyList<Any>()
+                        )
+
+                    val byCat = items.mapNotNull { it as? Map<*, *> }.associateBy { it["category"]?.toString().orEmpty() }
+                    val obsDate = byCat["T1H"]?.get("baseDate")?.toString() ?: base.baseDate
+                    val obsTime = byCat["T1H"]?.get("baseTime")?.toString() ?: base.baseTime
+                    val obsInstant = parseKmaObs(obsDate, obsTime)
+
+                    val tempC = byCat["T1H"]?.get("obsrValue")?.toString()?.toFloatOrNull()
+                    val humidity = byCat["REH"]?.get("obsrValue")?.toString()?.toFloatOrNull()
+                    val windSpeed = byCat["WSD"]?.get("obsrValue")?.toString()?.toFloatOrNull()
+                    val precipMm = byCat["RN1"]?.get("obsrValue")?.toString()?.toFloatOrNull()
+
+                    for (st in gridStations) {
+                        val existingObs = st.id?.let { weatherObservationRepo.findByStationIdAndObservedAt(it, obsInstant) }
+                        if (existingObs == null && st.id != null) {
+                            weatherObservationRepo.save(
+                                WeatherObservationEntity(
+                                    stationId = st.id!!,
+                                    observedAt = obsInstant,
+                                    temp = tempC,
+                                    humidity = humidity,
+                                    windSpeed = windSpeed,
+                                    precip = precipMm,
+                                    createdAt = Instant.now(),
+                                ),
+                            )
+                            obsInserted++
+                        }
+                        stationWeatherCurrentRepo.save(
+                            StationWeatherCurrentEntity(
+                                stationId = st.id,
+                                obsTime = "$obsDate $obsTime",
+                                temp = tempC?.toDouble(),
+                                rain = precipMm?.toDouble(),
+                                wind = windSpeed?.toDouble(),
+                                humidity = humidity?.toDouble(),
+                                updatedAt = Instant.now(),
+                            ),
+                        )
+                        okStations++
+                    }
+                } catch (e: Exception) {
+                    kmaCallFail++
+                    failStations += gridStations.size
+                    lastErr = e.message
+                    log.error("KMA ncst fetch failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
+                }
+            }
+
+            if (missingCoords > 0) {
+                failStations += missingCoords
+            }
+
+            log.info(
+                "WEATHER done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, obsInserted={}, missingCoords={}",
+                stations.size,
+                stationsByGrid.size,
+                kmaCallOk,
+                kmaCallFail,
+                obsInserted,
+                missingCoords,
+            )
         } catch (e: Exception) {
             log.error("weather ingestion failed", e)
-            fail++
+            failStations++
             lastErr = e.message
         } finally {
-            run.status = if (fail > 0) "FAILED" else "SUCCESS"
+            run.status = if (failStations > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
             run.endedAt = Instant.now()
-            run.successCount = ok
-            run.failCount = fail
+            run.successCount = okStations
+            run.failCount = failStations
             run.lastError = lastErr
             run.updatedAt = Instant.now()
             runRepo.save(run)
@@ -401,90 +450,135 @@ class IngestionRunner(
 
         val run = runRepo.save(IngestionRunEntity(jobType = "FORECAST", status = "SUCCESS"))
         val started = Instant.now()
-        var ok = 0
-        var fail = 0
+        var okRows = 0
+        var insertedRows = 0
+        var updatedRows = 0
+        var failStations = 0
+        var kmaCallOk = 0
+        var kmaCallFail = 0
         var lastErr: String? = null
 
         val base = computeKmaBase(ZoneId.of("Asia/Seoul"))
 
         try {
             val stations = stationRepo.findAll().filter { it.isActive }
-            for (st in stations) {
-                val (nx, ny) = when {
-                    st.nx != null && st.ny != null -> st.nx!! to st.ny!!
-                    st.lat != null && st.lng != null -> {
-                        val g = GridConverter.toGrid(st.lat!!, st.lng!!)
-                        st.nx = g.nx
-                        st.ny = g.ny
-                        stationRepo.save(st)
-                        g.nx to g.ny
-                    }
-                    else -> {
-                        fail++
-                        lastErr = "station ${st.id} missing nx/ny and lat/lng"
-                        continue
-                    }
-                }
 
-                val items = forecastClient.fetchUltraSrtFcst(nx, ny, base.baseDate, base.baseTime)
-                if (items.isEmpty()) {
+            val stationsByGrid = mutableMapOf<GridKey, MutableList<StationEntity>>()
+            var missingCoords = 0
+            for (st in stations) {
+                val key = resolveGrid(st)
+                if (key == null) {
+                    missingCoords++
+                    lastErr = "station ${st.id} missing nx/ny and lat/lng"
                     continue
                 }
+                stationsByGrid.getOrPut(key) { mutableListOf() }.add(st)
+            }
 
-                val grouped = items.groupBy { it.fcstDate + it.fcstTime }
-                for (group in grouped.values) {
-                    val data = group.associateBy { it.category }
-                    val whenAt = parseKmaForecast(group)
+            data class ForecastRow(
+                val whenAt: Instant,
+                val temp: Float?,
+                val humidity: Float?,
+                val wind: Float?,
+                val pop: Float?,
+                val sky: String?,
+                val precipType: String?,
+                val precipMm: Float?,
+            )
 
-                    if (st.id == null) continue
-                    val existing = weatherForecastRepo.findOne(st.id!!, whenAt)
-
-                    val temp = data["T1H"]?.fcstValue?.toFloatOrNull()
-                    val humidity = data["REH"]?.fcstValue?.toFloatOrNull()
-                    val wind = data["WSD"]?.fcstValue?.toFloatOrNull()
-                    val pop = data["POP"]?.fcstValue?.toFloatOrNull()
-                    val sky = data["SKY"]?.fcstValue
-                    val precipType = data["PTY"]?.fcstValue
-                    val precipMm = data["RN1"]?.fcstValue?.toFloatOrNull()
-
-                    if (existing == null) {
-                        weatherForecastRepo.save(
-                            WeatherForecastEntity(
-                                stationId = st.id!!,
-                                forecastAt = whenAt,
-                                temp = temp,
-                                humidity = humidity,
-                                windSpeed = wind,
-                                pop = pop,
-                                sky = sky,
-                                precipType = precipType,
-                                precipMm = precipMm,
-                                createdAt = Instant.now(),
-                            ),
-                        )
-                    } else {
-                        existing.temp = temp
-                        existing.humidity = humidity
-                        existing.windSpeed = wind
-                        existing.pop = pop
-                        existing.sky = sky
-                        existing.precipType = precipType
-                        existing.precipMm = precipMm
-                        weatherForecastRepo.save(existing)
+            for ((grid, gridStations) in stationsByGrid) {
+                val nx = grid.nx
+                val ny = grid.ny
+                try {
+                    val items = forecastClient.fetchUltraSrtFcst(nx, ny, base.baseDate, base.baseTime)
+                    kmaCallOk++
+                    if (items.isEmpty()) {
+                        continue
                     }
-                    ok++
+
+                    val grouped = items.groupBy { it.fcstDate + it.fcstTime }
+                    val rows = grouped.values.map { group ->
+                        val data = group.associateBy { it.category }
+                        val whenAt = parseKmaForecast(group)
+                        ForecastRow(
+                            whenAt = whenAt,
+                            temp = data["T1H"]?.fcstValue?.toFloatOrNull(),
+                            humidity = data["REH"]?.fcstValue?.toFloatOrNull(),
+                            wind = data["WSD"]?.fcstValue?.toFloatOrNull(),
+                            pop = data["POP"]?.fcstValue?.toFloatOrNull(),
+                            sky = data["SKY"]?.fcstValue,
+                            precipType = data["PTY"]?.fcstValue,
+                            precipMm = data["RN1"]?.fcstValue?.toFloatOrNull(),
+                        )
+                    }
+
+                    for (st in gridStations) {
+                        if (st.id == null) continue
+                        for (row in rows) {
+                            val existing = weatherForecastRepo.findOne(st.id!!, row.whenAt)
+                            if (existing == null) {
+                                weatherForecastRepo.save(
+                                    WeatherForecastEntity(
+                                        stationId = st.id!!,
+                                        forecastAt = row.whenAt,
+                                        temp = row.temp,
+                                        humidity = row.humidity,
+                                        windSpeed = row.wind,
+                                        pop = row.pop,
+                                        sky = row.sky,
+                                        precipType = row.precipType,
+                                        precipMm = row.precipMm,
+                                        createdAt = Instant.now(),
+                                    ),
+                                )
+                                insertedRows++
+                            } else {
+                                existing.temp = row.temp
+                                existing.humidity = row.humidity
+                                existing.windSpeed = row.wind
+                                existing.pop = row.pop
+                                existing.sky = row.sky
+                                existing.precipType = row.precipType
+                                existing.precipMm = row.precipMm
+                                weatherForecastRepo.save(existing)
+                                updatedRows++
+                            }
+                            okRows++
+                        }
+                    }
+                } catch (e: Exception) {
+                    kmaCallFail++
+                    failStations += gridStations.size
+                    lastErr = e.message
+                    log.error("KMA forecast fetch failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
                 }
             }
+
+            if (missingCoords > 0) {
+                failStations += missingCoords
+            }
+
+            log.info(
+                "FORECAST done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, rowsWritten={}, inserted={}, updated={}, missingCoords={}",
+                stations.size,
+                stationsByGrid.size,
+                kmaCallOk,
+                kmaCallFail,
+                okRows,
+                insertedRows,
+                updatedRows,
+                missingCoords,
+            )
         } catch (e: Exception) {
             log.error("forecast ingestion failed", e)
-            fail++
+            failStations++
             lastErr = e.message
         } finally {
-            run.status = if (fail > 0) "FAILED" else "SUCCESS"
+            run.status = if (failStations > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
             run.endedAt = Instant.now()
-            run.successCount = ok
-            run.failCount = fail
+            run.successCount = okRows
+            run.failCount = failStations
             run.lastError = lastErr
             run.updatedAt = Instant.now()
             runRepo.save(run)
@@ -500,6 +594,24 @@ class IngestionRunner(
     }
 
     private data class KmaBase(val baseDate: String, val baseTime: String)
+
+    private fun resolveGrid(st: StationEntity): GridKey? {
+        val nx = st.nx
+        val ny = st.ny
+        if (nx != null && ny != null) return GridKey(nx, ny)
+
+        val lat = st.lat
+        val lng = st.lng
+        if (lat != null && lng != null) {
+            val g = GridConverter.toGrid(lat, lng)
+            st.nx = g.nx
+            st.ny = g.ny
+            stationRepo.save(st)
+            return GridKey(g.nx, g.ny)
+        }
+
+        return null
+    }
 
     private fun computeKmaBase(zone: ZoneId): KmaBase {
         // UltraSrtNcst is published multiple times; to be safe, use "previous hour" as base_time.
