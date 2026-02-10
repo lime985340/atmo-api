@@ -36,7 +36,9 @@ class OAuthService(
             append("?response_type=code")
             append("&client_id=").append(enc(p.clientId))
             append("&redirect_uri=").append(enc(p.redirectUri))
-            append("&scope=").append(enc(p.scope))
+            if (p.scope.isNotBlank()) {
+                append("&scope=").append(enc(p.scope))
+            }
             append("&state=").append(enc(state))
         }
     }
