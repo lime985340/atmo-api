@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import lime.atmo.infra.jpa.repo.AirCurrentRepo
 import lime.atmo.infra.jpa.repo.StationRepo
 import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
+import org.slf4j.LoggerFactory
+import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -22,6 +24,8 @@ class MapController(
     private val redis: StringRedisTemplate,
     private val objectMapper: ObjectMapper,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     data class AirMarkerDto(
         val stationId: Long,
         val stationName: String,
@@ -66,12 +70,21 @@ class MapController(
     }
 
     private fun <T> getOrSetJson(key: String, ttlSeconds: Long, typeRef: TypeReference<T>, supplier: () -> T): T {
-        val cached = redis.opsForValue().get(key)
+        val cached = try {
+            redis.opsForValue().get(key)
+        } catch (e: RedisConnectionFailureException) {
+            log.warn("Redis read failed for key={}, bypassing cache", key, e)
+            null
+        }
         if (cached != null) {
             return objectMapper.readValue(cached, typeRef)
         }
         val value = supplier()
-        redis.opsForValue().set(key, objectMapper.writeValueAsString(value), java.time.Duration.ofSeconds(ttlSeconds))
+        try {
+            redis.opsForValue().set(key, objectMapper.writeValueAsString(value), Duration.ofSeconds(ttlSeconds))
+        } catch (e: RedisConnectionFailureException) {
+            log.warn("Redis write failed for key={}, returning uncached response", key, e)
+        }
         return value
     }
 
