@@ -67,9 +67,9 @@ class AuthController(
                 "refresh_token=${pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
             )
             val redirectUrl = if (returnTo.contains("#")) {
-                "${returnTo}&access_token=${pair.accessToken}"
+                "$returnTo&access_token=${pair.accessToken}"
             } else {
-                "${returnTo}#access_token=${pair.accessToken}"
+                "$returnTo#access_token=${pair.accessToken}"
             }
             return ResponseEntity.status(302).header("Location", redirectUrl).build()
         }

@@ -91,8 +91,8 @@ class StationController(
                 WeatherDataDto(
                     temp = it.temp,
                     humidity = it.humidity,
-                    wind = it.wind,
-                    rain = it.rain,
+                    windSpeed = it.windSpeed,
+                    precip = it.precip,
                     obsTime = it.obsTime,
                 )
             }
@@ -141,8 +141,8 @@ class StationController(
                 WeatherDataDto(
                     temp = it.temp,
                     humidity = it.humidity,
-                    wind = it.wind,
-                    rain = it.rain,
+                    windSpeed = it.windSpeed,
+                    precip = it.precip,
                     obsTime = it.obsTime,
                 )
             }
@@ -274,8 +274,8 @@ data class AirDataDto(
 data class WeatherDataDto(
     val temp: Double?,
     val humidity: Double?,
-    val wind: Double?,
-    val rain: Double?,
+    val windSpeed: Double?,
+    val precip: Double?,
     val obsTime: String?,
 )
 

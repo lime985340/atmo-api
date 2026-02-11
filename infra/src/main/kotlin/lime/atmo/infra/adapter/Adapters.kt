@@ -46,9 +46,9 @@ class WeatherReadAdapter(
                 parseObs(it.obsTime),
                 it.temp,
                 it.humidity,
-                it.wind,
+                it.windSpeed,
                 null,
-                it.rain,
+                it.precip,
             )
         }
     }
