@@ -48,8 +48,8 @@ class MapController(
         val obsTime: String?,
         val temp: Double?,
         val humidity: Double?,
-        val wind: Double?,
-        val rain: Double?,
+        val windSpeed: Double?,
+        val precip: Double?,
         val stale: Boolean,
     )
 
@@ -161,8 +161,8 @@ class MapController(
                         obsTime = obsTime,
                         temp = c?.temp,
                         humidity = c?.humidity,
-                        wind = c?.wind,
-                        rain = c?.rain,
+                        windSpeed = c?.windSpeed,
+                        precip = c?.precip,
                         stale = updatedAt == null || updatedAt.isBefore(staleCutoff),
                     )
                 }
