@@ -4,7 +4,7 @@
 
 ## 완료
 - 인증: OAuth(google/naver/kakao) -> JWT 발급, refresh 토큰 해시 저장/회전/로그아웃
-- 핵심 스키마: app_users, user_refresh_tokens, stations, air_observations, weather_observations, air_currents, station_weather_currents, ingestion_runs, favorite_locations
+- 핵심 스키마: app_users, user_refresh_tokens, stations, air_observations, weather_observations, air_currents, weather_currnets, ingestion_runs, favorite_locations
 - 측정소 API: /api/v1/stations, /api/v1/stations/{id}, /api/v1/stations/by-sido
 - 대시보드/즐겨찾기: /api/v1/dashboard, /api/v1/favorites(+/dashboard)
 - 수집(ingestion): station seed, air_current, station_weather_current (cron 스케줄, ingestion 프로파일)

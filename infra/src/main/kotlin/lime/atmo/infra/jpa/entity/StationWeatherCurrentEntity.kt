@@ -7,7 +7,7 @@ import jakarta.persistence.Table
 import java.time.Instant
 
 @Entity
-@Table(name = "station_weather_currents")
+@Table(name = "weather_currnets")
 class StationWeatherCurrentEntity(
     @Id
     @Column(name = "station_id")
