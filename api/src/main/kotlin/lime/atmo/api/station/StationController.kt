@@ -1,10 +1,15 @@
 package lime.atmo.api.station
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import lime.atmo.application.port.WeatherReadPort
 import lime.atmo.domain.model.WeatherHour
 import lime.atmo.infra.jpa.repo.AirCurrentRepo
 import lime.atmo.infra.jpa.repo.StationRepo
 import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
+import org.slf4j.LoggerFactory
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -13,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
@@ -28,7 +34,34 @@ class StationController(
     private val airCurrentRepo: AirCurrentRepo,
     private val stationWeatherCurrentRepo: StationWeatherCurrentRepo,
     private val weatherReadPort: WeatherReadPort,
+    private val redis: StringRedisTemplate,
+    private val objectMapper: ObjectMapper,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    private fun normCoord(value: Double): String = String.format(Locale.US, "%.4f", value)
+
+    private fun bboxCacheKey(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, limit: Int): String =
+        "stations:bbox:${normCoord(minLat)},${normCoord(minLng)},${normCoord(maxLat)},${normCoord(maxLng)}:limit=$limit"
+
+    private fun readCachedStations(key: String): BboxStationsResponse? {
+        val raw = try {
+            redis.opsForValue().get(key)
+        } catch (e: RedisConnectionFailureException) {
+            log.warn("Redis read failed for key={}, bypassing cache", key, e)
+            null
+        }
+        return raw?.let { objectMapper.readValue(it, object : TypeReference<BboxStationsResponse>() {}) }
+    }
+
+    private fun writeCachedStations(key: String, value: BboxStationsResponse) {
+        try {
+            redis.opsForValue().set(key, objectMapper.writeValueAsString(value), Duration.ofSeconds(20))
+        } catch (e: RedisConnectionFailureException) {
+            log.warn("Redis write failed for key={}, returning uncached response", key, e)
+        }
+    }
+
 
     /**
      * 모든 활성 측정소 목록 조회 (대기질 + 날씨 데이터 포함)
@@ -213,23 +246,36 @@ class StationController(
         val maxLat = max(swLat, neLat)
         val minLng = min(swLng, neLng)
         val maxLng = max(swLng, neLng)
-        val stations = stationRepo.findActiveInBbox(minLat, maxLat, minLng, maxLng)
-        val stationDtos = stations.mapNotNull { station ->
-            val stationId = station.id ?: return@mapNotNull null
-            val lat = station.lat ?: return@mapNotNull null
-            val lng = station.lng ?: return@mapNotNull null
-            BboxStationDto(
-                id = stationId,
-                name = station.stationName,
-                addr = station.addr,
-                sido = station.sido,
-                regionCode = station.regionCode,
-                lat = lat,
-                lng = lng,
-            )
+        val safeLimit = limit.coerceAtLeast(1)
+        val cacheKey = bboxCacheKey(minLat, minLng, maxLat, maxLng, safeLimit)
+        val cached = readCachedStations(cacheKey)
+
+        return try {
+            val stations = stationRepo.findActiveInBbox(minLat, maxLat, minLng, maxLng)
+            val stationDtos = stations.mapNotNull { station ->
+                val stationId = station.id ?: return@mapNotNull null
+                val lat = station.lat ?: return@mapNotNull null
+                val lng = station.lng ?: return@mapNotNull null
+                BboxStationDto(
+                    id = stationId,
+                    name = station.stationName,
+                    addr = station.addr,
+                    sido = station.sido,
+                    regionCode = station.regionCode,
+                    lat = lat,
+                    lng = lng,
+                )
+            }
+            val trimmed = stationDtos.take(safeLimit)
+            BboxStationsResponse(stations = trimmed).also { writeCachedStations(cacheKey, it) }
+        } catch (e: Exception) {
+            if (cached != null) {
+                log.warn("BBox DB read failed; serving cached response for key={}", cacheKey, e)
+                cached
+            } else {
+                throw e
+            }
         }
-        val trimmed = if (limit > 0) stationDtos.take(limit) else stationDtos
-        return BboxStationsResponse(stations = trimmed)
     }
 }
 
