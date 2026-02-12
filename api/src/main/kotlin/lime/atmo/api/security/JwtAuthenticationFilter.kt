@@ -20,7 +20,12 @@ class JwtAuthenticationFilter(
         chain: FilterChain,
     ) {
         val h = req.getHeader("Authorization") ?: ""
+        val uri = req.requestURI
+        
         if (!h.startsWith("Bearer ")) {
+            if (uri.contains("/favorites") || uri.contains("/me")) {
+                log.info("No Bearer token for protected endpoint: {}, Authorization header: {}", uri, h.take(20))
+            }
             chain.doFilter(req, res)
             return
         }
@@ -34,8 +39,9 @@ class JwtAuthenticationFilter(
                 null,
                 listOf(SimpleGrantedAuthority("ROLE_USER")),
             )
+            log.debug("Authenticated user: {} for URI: {}", userId, uri)
         } else {
-            log.debug("Invalid or expired access token provided")
+            log.warn("Invalid or expired access token for URI: {}, token prefix: {}", uri, token.take(10))
         }
         chain.doFilter(req, res)
     }
