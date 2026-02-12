@@ -29,6 +29,7 @@ class OAuthService(
 ) {
     fun authorizeUrl(providerKey: String, state: String): String {
         val p = provider(providerKey)
+
         // URLEncoder encodes spaces as '+', which is not always interpreted as space
         // in query strings by OAuth providers. Encode spaces as %20 for compatibility.
         fun enc(s: String) = URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20")

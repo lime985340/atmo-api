@@ -21,7 +21,7 @@ class JwtAuthenticationFilter(
     ) {
         val h = req.getHeader("Authorization") ?: ""
         val uri = req.requestURI
-        
+
         if (!h.startsWith("Bearer ")) {
             if (uri.contains("/favorites") || uri.contains("/me")) {
                 log.info("No Bearer token for protected endpoint: {}, Authorization header: {}", uri, h.take(20))
