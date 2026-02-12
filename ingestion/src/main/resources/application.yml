@@ -6,9 +6,9 @@ spring:
   main:
     web-application-type: none
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/app}
-    username: ${SPRING_DATASOURCE_USERNAME:app}
-    password: ${SPRING_DATASOURCE_PASSWORD:app}
+    url: ${SPRING_DATASOURCE_URL:${spring.datasource.url:jdbc:postgresql://localhost:5432/app}}
+    username: ${SPRING_DATASOURCE_USERNAME:${spring.datasource.username:app}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
   jpa:
     hibernate:
       ddl-auto: validate
