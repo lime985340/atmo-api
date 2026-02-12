@@ -57,7 +57,7 @@ class OAuthService(
         val accessToken = tokenJson["access_token"]?.asText()
             ?: throw IllegalStateException("access_token missing")
 
-        val userJson = client.fetchUserInfo(p, accessToken).block()
+        val userJson = client.fetchUserInfo(providerKey, p, accessToken).block()
             ?: throw IllegalStateException("userinfo failed")
 
         val (subject, email, name) = mapUser(providerKey, userJson)
@@ -97,10 +97,11 @@ class OAuthService(
 
         "naver" -> {
             val res = json["response"] ?: error("naver response missing")
+            val name = res["name"]?.asText() ?: res["nickname"]?.asText()
             Triple(
                 res["id"]?.asText() ?: error("naver id missing"),
                 res["email"]?.asText(),
-                res["name"]?.asText(),
+                name,
             )
         }
 
@@ -108,8 +109,8 @@ class OAuthService(
             val id = json["id"]?.asText() ?: error("kakao id missing")
             val account = json["kakao_account"]
             val email = account?.get("email")?.asText()
-            val nickname = json["properties"]?.get("nickname")?.asText()
-                ?: account?.get("profile")?.get("nickname")?.asText()
+            val nickname = account?.get("profile")?.get("nickname")?.asText()
+                ?: json["properties"]?.get("nickname")?.asText()
             Triple(id, email, nickname)
         }
 

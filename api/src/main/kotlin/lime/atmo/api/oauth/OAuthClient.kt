@@ -33,12 +33,27 @@ class OAuthClient {
             .map { mapper.readTree(it) }
     }
 
-    fun fetchUserInfo(provider: OAuthProviderProps, accessToken: String): Mono<JsonNode> =
-        web.get()
-            .uri(provider.userinfoUri)
-            .header("Authorization", "Bearer $accessToken")
-            .accept(MediaType.APPLICATION_JSON)
+    fun fetchUserInfo(providerKey: String, provider: OAuthProviderProps, accessToken: String): Mono<JsonNode> {
+        val req = if (providerKey.lowercase() == "kakao") {
+            // Kakao user info endpoint requires POST.
+            // https://developers.kakao.com/docs/latest/ko/kakaologin/rest-api#req-user-info
+            val form = LinkedMultiValueMap<String, String>()
+            web.post()
+                .uri(provider.userinfoUri)
+                .header("Authorization", "Bearer $accessToken")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .accept(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromFormData(form))
+        } else {
+            web.get()
+                .uri(provider.userinfoUri)
+                .header("Authorization", "Bearer $accessToken")
+                .accept(MediaType.APPLICATION_JSON)
+        }
+
+        return req
             .retrieve()
             .bodyToMono(String::class.java)
             .map { mapper.readTree(it) }
+    }
 }
