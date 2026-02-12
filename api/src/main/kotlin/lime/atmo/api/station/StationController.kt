@@ -62,7 +62,6 @@ class StationController(
         }
     }
 
-
     /**
      * 모든 활성 측정소 목록 조회 (대기질 + 날씨 데이터 포함)
      *
