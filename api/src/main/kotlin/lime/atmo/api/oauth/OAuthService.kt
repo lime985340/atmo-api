@@ -29,7 +29,9 @@ class OAuthService(
 ) {
     fun authorizeUrl(providerKey: String, state: String): String {
         val p = provider(providerKey)
-        fun enc(s: String) = URLEncoder.encode(s, StandardCharsets.UTF_8)
+        // URLEncoder encodes spaces as '+', which is not always interpreted as space
+        // in query strings by OAuth providers. Encode spaces as %20 for compatibility.
+        fun enc(s: String) = URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20")
 
         return buildString {
             append(p.authUri)
@@ -89,11 +91,17 @@ class OAuthService(
         providerKey: String,
         json: com.fasterxml.jackson.databind.JsonNode,
     ): Triple<String, String?, String?> = when (providerKey.lowercase()) {
-        "google" -> Triple(
-            json["sub"]?.asText() ?: error("google sub missing"),
-            json["email"]?.asText(),
-            json["name"]?.asText(),
-        )
+        "google" -> {
+            val given = json["given_name"]?.asText()?.trim().orEmpty()
+            val family = json["family_name"]?.asText()?.trim().orEmpty()
+            val composed = listOf(family, given).filter { it.isNotBlank() }.joinToString(" ")
+            val name = json["name"]?.asText() ?: composed.ifBlank { null }
+            Triple(
+                json["sub"]?.asText() ?: error("google sub missing"),
+                json["email"]?.asText(),
+                name,
+            )
+        }
 
         "naver" -> {
             val res = json["response"] ?: error("naver response missing")
