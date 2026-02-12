@@ -114,17 +114,29 @@ class FavoriteAdapter(
     private val stationRepo: StationRepo,
 ) : FavoritePort {
 
+    private fun FavoriteLocationEntity.toDto(): FavoriteLocationDto {
+        return FavoriteLocationDto(
+            id = this.id!!,
+            name = this.name,
+            lat = this.lat,
+            lng = this.lon,
+            stationId = this.stationId,
+            stationName = this.stationName,
+        )
+    }
+
     override fun listFavorites(userId: UUID): List<FavoriteLocationDto> {
-        return favRepo.findAllByUserIdAndIsActiveTrueOrderByCreatedAtDesc(userId).map {
-            FavoriteLocationDto(
-                id = it.id!!,
-                name = it.name,
-                lat = it.lat,
-                lng = it.lon,
-                stationId = it.stationId,
-                stationName = it.stationName,
-            )
-        }
+        val seen = mutableSetOf<String>()
+        return favRepo.findAllByUserIdAndIsActiveTrueOrderByCreatedAtDesc(userId)
+            .filter { favorite ->
+                val dedupeKey = if (favorite.stationId != null) {
+                    "station:${favorite.stationId}"
+                } else {
+                    "grid:${favorite.nx}:${favorite.ny}"
+                }
+                seen.add(dedupeKey)
+            }
+            .map { it.toDto() }
     }
 
     override fun createFavorite(userId: UUID, name: String, lat: Double, lng: Double): FavoriteLocationDto {
@@ -138,9 +150,22 @@ class FavoriteAdapter(
             Pair(g.first, g.second)
         }
 
+        val existing = nearest?.id?.let { stationId ->
+            favRepo.findFirstByUserIdAndIsActiveTrueAndStationId(userId, stationId)
+        } ?: favRepo.findFirstByUserIdAndIsActiveTrueAndNxAndNy(userId, nxny.first, nxny.second)
+
+        if (existing != null) return existing.toDto()
+
+        val trimmedName = name.trim()
+        val resolvedName = if (trimmedName.isNotEmpty()) {
+            trimmedName
+        } else {
+            nearest?.addr ?: nearest?.stationName ?: "즐겨찾기"
+        }
+
         val entity = FavoriteLocationEntity(
             userId = userId,
-            name = name,
+            name = resolvedName,
             lat = lat,
             lon = lng,
             nx = nxny.first,
@@ -152,7 +177,7 @@ class FavoriteAdapter(
             updatedAt = Instant.now(),
         )
         val saved = favRepo.save(entity)
-        return FavoriteLocationDto(saved.id!!, saved.name, saved.lat, saved.lon, saved.stationId, saved.stationName)
+        return saved.toDto()
     }
 
     override fun removeFavorite(userId: UUID, favoriteId: Long) {
