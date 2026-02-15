@@ -21,7 +21,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
-data class CreateFavoriteRequest(val name: String, val lat: Double, val lng: Double)
+data class CreateFavoriteRequest(val description: String, val lat: Double, val lng: Double, val address: String? = null)
 
 @RestController
 @RequestMapping("/api/v1/favorites")
@@ -41,7 +41,7 @@ class FavoritesController(
 
     @PostMapping
     fun create(auth: Authentication?, @RequestBody req: CreateFavoriteRequest): ResponseEntity<Any> {
-        val created = favorites.createFavorite(uid(auth), req.name, req.lat, req.lng)
+        val created = favorites.createFavorite(uid(auth), req.description, req.lat, req.lng, req.address)
         // invalidate dashboard cache
         redis.delete("favorites:dashboard:${uid(auth)}")
         return ResponseEntity.ok(created)
@@ -57,11 +57,10 @@ class FavoritesController(
 
     data class FavoriteDashboardCard(
         val id: Long,
-        val name: String,
+        val description: String,
         val lat: Double,
         val lng: Double,
-        val stationId: Long?,
-        val stationName: String?,
+        val address: String?,
         val weatherObsTime: String?,
         val tempC: Float?,
         val humidity: Float?,
@@ -97,25 +96,26 @@ class FavoritesController(
         }
 
         val favs = favorites.listFavorites(userId)
-        val stationIds = favs.mapNotNull { it.stationId }.distinct()
-        val airMap = airCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
-        val wMap = stationWeatherCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
-
         val now = Instant.now()
         val forecastUntil = now.plus(Duration.ofHours(6))
+
         val cards = favs.map { f ->
-            val air = f.stationId?.let { airMap[it] }
-            val w = f.stationId?.let { wMap[it] }
-            val forecast = f.stationId?.let { weatherReadPort.getNextHours(it, now, forecastUntil) } ?: emptyList()
+            // 실시간으로 가장 가까운 측정소 찾기
+            val nearestStationId = favorites.findNearestStationId(f.lat, f.lng)
+
+            val air = nearestStationId?.let { airCurrentRepo.findByStationId(it) }
+            val w = nearestStationId?.let { stationWeatherCurrentRepo.findByStationId(it) }
+            val forecast = nearestStationId?.let { weatherReadPort.getNextHours(it, now, forecastUntil) } ?: emptyList()
+
             val updatedAt = listOfNotNull(air?.dataTime, w?.updatedAt).maxOrNull()
             val stale = updatedAt?.let { Duration.between(it, now) > Duration.ofMinutes(30) } ?: true
+
             FavoriteDashboardCard(
                 id = f.id,
-                name = f.name,
+                description = f.description,
                 lat = f.lat,
                 lng = f.lng,
-                stationId = f.stationId,
-                stationName = f.stationName,
+                address = f.address,
                 weatherObsTime = w?.obsTime,
                 tempC = w?.temp?.toFloat(),
                 humidity = w?.humidity?.toFloat(),

@@ -15,8 +15,8 @@ import java.util.UUID
     name = "favorite_locations",
     indexes = [
         Index(name = "idx_favorite_locations_user_active", columnList = "user_id,is_active"),
-        Index(name = "idx_favorite_locations_station_id", columnList = "station_id"),
         Index(name = "idx_favorite_locations_nxny", columnList = "nx,ny"),
+        Index(name = "idx_favorite_locations_address", columnList = "address"),
     ],
 )
 class FavoriteLocationEntity(
@@ -28,7 +28,7 @@ class FavoriteLocationEntity(
     var userId: UUID,
 
     @Column(nullable = false)
-    var name: String,
+    var description: String,
 
     @Column(nullable = false)
     var lat: Double,
@@ -42,11 +42,8 @@ class FavoriteLocationEntity(
     @Column(nullable = false)
     var ny: Int,
 
-    @Column(name = "station_id")
-    var stationId: Long? = null,
-
-    @Column(name = "station_name")
-    var stationName: String? = null,
+    @Column(name = "address")
+    var address: String? = null,
 
     @Column(name = "is_active", nullable = false)
     var isActive: Boolean = true,
