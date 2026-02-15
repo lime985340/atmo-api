@@ -14,8 +14,6 @@ interface FavoriteLocationRepository : JpaRepository<FavoriteLocationEntity, Lon
 
     fun findByIdAndUserIdAndIsActiveTrue(id: Long, userId: UUID): FavoriteLocationEntity?
 
-    fun findFirstByUserIdAndIsActiveTrueAndStationId(userId: UUID, stationId: Long): FavoriteLocationEntity?
-
     fun findFirstByUserIdAndIsActiveTrueAndNxAndNy(userId: UUID, nx: Int, ny: Int): FavoriteLocationEntity?
 
     @Modifying
