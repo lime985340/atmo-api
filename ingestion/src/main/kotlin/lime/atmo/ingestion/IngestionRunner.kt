@@ -20,13 +20,13 @@ import lime.atmo.ingestion.kma.GridConverter
 import lime.atmo.ingestion.kma.KmaFcstItem
 import lime.atmo.ingestion.kma.KmaForecastClient
 import lime.atmo.ingestion.kma.KmaRetry
-import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
+import java.sql.SQLException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -63,7 +63,8 @@ class IngestionRunner(
     private fun isUniqueViolation(e: DataIntegrityViolationException): Boolean {
         var t: Throwable? = e
         while (t != null) {
-            if (t is PSQLException && t.sqlState == "23505") {
+            val sql = t as? SQLException
+            if (sql?.sqlState == "23505") {
                 return true
             }
             t = t.cause
