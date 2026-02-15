@@ -11,9 +11,10 @@ import lime.atmo.application.port.WeatherReadPort
 import lime.atmo.domain.model.AirNow
 import lime.atmo.domain.model.WeatherHour
 import lime.atmo.domain.model.WeatherNow
+import lime.atmo.infra.cache.GridStationMappingService
+import lime.atmo.infra.cache.StationCacheService
 import lime.atmo.infra.jpa.entity.AppUserEntity
 import lime.atmo.infra.jpa.entity.FavoriteLocationEntity
-import lime.atmo.infra.jpa.entity.StationEntity
 import lime.atmo.infra.jpa.repo.AirCurrentRepo
 import lime.atmo.infra.jpa.repo.AppUserRepository
 import lime.atmo.infra.jpa.repo.FavoriteLocationRepository
@@ -27,11 +28,45 @@ import java.util.UUID
 @Component
 class LocationAdapter(
     private val repo: FavoriteLocationRepository,
+    private val stationRepo: StationRepo,
+    private val stationCacheService: StationCacheService,
+    private val gridStationMappingService: GridStationMappingService,
 ) : LocationPort {
     override fun getLocation(locationId: Long): LocationDto? {
         return repo.findById(locationId).orElse(null)?.let {
-            LocationDto(it.id!!, it.name, it.stationId, it.stationName)
+            LocationDto(it.id!!, it.description, it.address, it.lat, it.lon)
         }
+    }
+
+    /**
+     * 가장 가까운 측정소 ID 찾기 (최적화된 버전)
+     * 1. Grid 기반 캐시 우선 검색 (O(1) ~ O(9))
+     * 2. 메모리 내 BBox 검색
+     * 3. PostGIS 공간 인덱스 검색 (fallback)
+     */
+    override fun findNearestStationId(lat: Double, lng: Double): Long? {
+        // 1. Grid 기반 매핑 서비스로 먼저 검색 (캐시 활용)
+        val cachedStation = gridStationMappingService.findNearestStation(lat, lng)
+        if (cachedStation != null) {
+            return cachedStation.id
+        }
+
+        // 2. PostGIS 기반 검색 (DB 레벨 최적화)
+        return stationRepo.findNearestWithPostGIS(lat, lng, maxDistanceKm = 100.0)?.id
+    }
+
+    /**
+     * Haversine 공식으로 두 지점 간 거리 계산 (km)
+     */
+    private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371.0088
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        return r * c
     }
 }
 
@@ -112,16 +147,17 @@ class AirReadAdapter(
 class FavoriteAdapter(
     private val favRepo: FavoriteLocationRepository,
     private val stationRepo: StationRepo,
+    private val stationCacheService: StationCacheService,
+    private val gridStationMappingService: GridStationMappingService,
 ) : FavoritePort {
 
     private fun FavoriteLocationEntity.toDto(): FavoriteLocationDto {
         return FavoriteLocationDto(
             id = this.id!!,
-            name = this.name,
+            description = this.description,
             lat = this.lat,
             lng = this.lon,
-            stationId = this.stationId,
-            stationName = this.stationName,
+            address = this.address,
         )
     }
 
@@ -129,49 +165,33 @@ class FavoriteAdapter(
         val seen = mutableSetOf<String>()
         return favRepo.findAllByUserIdAndIsActiveTrueOrderByCreatedAtDesc(userId)
             .filter { favorite ->
-                val dedupeKey = if (favorite.stationId != null) {
-                    "station:${favorite.stationId}"
-                } else {
-                    "grid:${favorite.nx}:${favorite.ny}"
-                }
+                val dedupeKey = "grid:${favorite.nx}:${favorite.ny}"
                 seen.add(dedupeKey)
             }
             .map { it.toDto() }
     }
 
-    override fun createFavorite(userId: UUID, name: String, lat: Double, lng: Double): FavoriteLocationDto {
-        val nearest = findNearestStation(lat, lng)
-        val nxny = nearest?.let { s ->
-            val nx = s.nx
-            val ny = s.ny
-            if (nx != null && ny != null) Pair(nx, ny) else null
-        } ?: run {
-            val g = GridConverter.toGrid(lat, lng)
-            Pair(g.first, g.second)
-        }
+    override fun createFavorite(userId: UUID, description: String, lat: Double, lng: Double, address: String?): FavoriteLocationDto {
+        val (nx, ny) = gridStationMappingService.toGrid(lat, lng)
 
-        val existing = nearest?.id?.let { stationId ->
-            favRepo.findFirstByUserIdAndIsActiveTrueAndStationId(userId, stationId)
-        } ?: favRepo.findFirstByUserIdAndIsActiveTrueAndNxAndNy(userId, nxny.first, nxny.second)
-
+        val existing = favRepo.findFirstByUserIdAndIsActiveTrueAndNxAndNy(userId, nx, ny)
         if (existing != null) return existing.toDto()
 
-        val trimmedName = name.trim()
-        val resolvedName = if (trimmedName.isNotEmpty()) {
-            trimmedName
+        val trimmedDescription = description.trim()
+        val resolvedDescription = if (trimmedDescription.isNotEmpty()) {
+            trimmedDescription
         } else {
-            nearest?.addr ?: nearest?.stationName ?: "즐겨찾기"
+            "즐겨찾기"
         }
 
         val entity = FavoriteLocationEntity(
             userId = userId,
-            name = resolvedName,
+            description = resolvedDescription,
             lat = lat,
             lon = lng,
-            nx = nxny.first,
-            ny = nxny.second,
-            stationId = nearest?.id,
-            stationName = nearest?.stationName,
+            nx = nx,
+            ny = ny,
+            address = address,
             isActive = true,
             createdAt = Instant.now(),
             updatedAt = Instant.now(),
@@ -185,26 +205,26 @@ class FavoriteAdapter(
         if (updated == 0) throw IllegalArgumentException("favorite not found")
     }
 
-    private fun findNearestStation(lat: Double, lng: Double): StationEntity? {
-        // 1) candidate bbox (expand gradually)
-        val steps = listOf(0.10, 0.25, 0.50, 1.00) // degrees
-        for (d in steps) {
-            val candidates = stationRepo.findActiveInBbox(lat - d, lat + d, lng - d, lng + d)
-            val nearest = candidates.minByOrNull { s ->
-                val slat = s.lat ?: return@minByOrNull Double.POSITIVE_INFINITY
-                val slng = s.lng ?: return@minByOrNull Double.POSITIVE_INFINITY
-                haversineKm(lat, lng, slat, slng)
-            }
-            if (nearest != null) return nearest
+    /**
+     * 가장 가까운 측정소 ID 찾기 (최적화된 버전)
+     * 1. Grid 기반 캐시 우선 검색 (O(1) ~ O(9))
+     * 2. 메모리 내 전체 검색
+     * 3. PostGIS 공간 인덱스 검색 (fallback)
+     */
+    override fun findNearestStationId(lat: Double, lng: Double): Long? {
+        // 1. Grid 기반 매핑 서비스로 먼저 검색 (캐시 활용)
+        val cachedStation = gridStationMappingService.findNearestStation(lat, lng)
+        if (cachedStation != null) {
+            return cachedStation.id
         }
-        // last resort: all active with coords (could be large)
-        return stationRepo.findAllActiveWithCoordinates().minByOrNull { s ->
-            val slat = s.lat ?: return@minByOrNull Double.POSITIVE_INFINITY
-            val slng = s.lng ?: return@minByOrNull Double.POSITIVE_INFINITY
-            haversineKm(lat, lng, slat, slng)
-        }
+
+        // 2. PostGIS 기반 검색 (DB 레벨 최적화)
+        return stationRepo.findNearestWithPostGIS(lat, lng, maxDistanceKm = 100.0)?.id
     }
 
+    /**
+     * Haversine 공식으로 두 지점 간 거리 계산 (km)
+     */
     private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val r = 6371.0088
         val dLat = Math.toRadians(lat2 - lat1)
@@ -214,45 +234,6 @@ class FavoriteAdapter(
             Math.sin(dLon / 2) * Math.sin(dLon / 2)
         val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
         return r * c
-    }
-
-    private object GridConverter {
-        // KMA DFS(LCC) grid conversion (lat,lng -> nx,ny), same constants as KMA sample.
-        private const val RE = 6371.00877
-        private const val GRID = 5.0
-        private const val SLAT1 = 30.0
-        private const val SLAT2 = 60.0
-        private const val OLON = 126.0
-        private const val OLAT = 38.0
-        private const val XO = 43.0
-        private const val YO = 136.0
-
-        fun toGrid(lat: Double, lng: Double): Pair<Int, Int> {
-            val degToRad = Math.PI / 180.0
-            val re = RE / GRID
-            val slat1 = SLAT1 * degToRad
-            val slat2 = SLAT2 * degToRad
-            val olon = OLON * degToRad
-            val olat = OLAT * degToRad
-
-            var sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5)
-            sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn)
-            var sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5)
-            sf = Math.pow(sf, sn) * Math.cos(slat1) / sn
-            var ro = Math.tan(Math.PI * 0.25 + olat * 0.5)
-            ro = re * sf / Math.pow(ro, sn)
-
-            var ra = Math.tan(Math.PI * 0.25 + (lat) * degToRad * 0.5)
-            ra = re * sf / Math.pow(ra, sn)
-            var theta = (lng) * degToRad - olon
-            if (theta > Math.PI) theta -= 2.0 * Math.PI
-            if (theta < -Math.PI) theta += 2.0 * Math.PI
-            theta *= sn
-
-            val x = (ra * Math.sin(theta) + XO + 0.5).toInt()
-            val y = (ro - ra * Math.cos(theta) + YO + 0.5).toInt()
-            return Pair(x, y)
-        }
     }
 }
 
