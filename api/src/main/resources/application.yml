@@ -7,9 +7,9 @@ spring:
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configtree:/etc/secrets/}"
   datasource:
-    url: ${spring.datasource.url:jdbc:postgresql://localhost:5432/app}
-    username: ${spring.datasource.username:app}
-    password: ${spring.datasource.password:app}
+    url: ${SPRING_DATASOURCE_URL:${spring.datasource.url:jdbc:postgresql://localhost:5432/app}}
+    username: ${SPRING_DATASOURCE_USERNAME:${spring.datasource.username:app}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -21,8 +21,8 @@ spring:
 
   data:
     redis:
-      host: ${SPRING_REDIS_HOST:localhost}
-      port: ${SPRING_REDIS_PORT:6379}
+      host: ${SPRING_REDIS_HOST:${spring.redis.host:localhost}}
+      port: ${SPRING_REDIS_PORT:${spring.redis.port:6379}}
 
 management:
   endpoints:

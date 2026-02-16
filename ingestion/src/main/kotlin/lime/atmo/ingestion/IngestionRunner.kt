@@ -22,9 +22,11 @@ import lime.atmo.ingestion.kma.KmaForecastClient
 import lime.atmo.ingestion.kma.KmaRetry
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
+import java.sql.SQLException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -57,6 +59,18 @@ class IngestionRunner(
     private val log = LoggerFactory.getLogger(javaClass)
 
     private data class GridKey(val nx: Int, val ny: Int)
+
+    private fun isUniqueViolation(e: DataIntegrityViolationException): Boolean {
+        var t: Throwable? = e
+        while (t != null) {
+            val sql = t as? SQLException
+            if (sql?.sqlState == "23505") {
+                return true
+            }
+            t = t.cause
+        }
+        return false
+    }
 
     /**
      * AirKorea - 대기오염정보 조회 서비스 (측정값)
@@ -256,20 +270,29 @@ class IngestionRunner(
                     val stationId = station.id ?: continue
                     val existingObs = airObservationRepo.findByStationIdAndObservedAt(stationId, dataTime)
                     if (existingObs == null) {
-                        airObservationRepo.save(
-                            AirObservationEntity(
-                                stationId = stationId,
-                                observedAt = dataTime,
-                                pm10 = pm10,
-                                pm25 = pm25,
-                                o3 = o3,
-                                no2 = no2,
-                                co = co,
-                                so2 = so2,
-                                grade = grade,
-                                createdAt = Instant.now(),
-                            ),
-                        )
+                        try {
+                            airObservationRepo.save(
+                                AirObservationEntity(
+                                    stationId = stationId,
+                                    observedAt = dataTime,
+                                    pm10 = pm10,
+                                    pm25 = pm25,
+                                    o3 = o3,
+                                    no2 = no2,
+                                    co = co,
+                                    so2 = so2,
+                                    grade = grade,
+                                    createdAt = Instant.now(),
+                                ),
+                            )
+                        } catch (e: DataIntegrityViolationException) {
+                            // (station_id, observed_at) 유니크 제약: 동시 실행/레이스 컨디션으로 중복 insert가 발생할 수 있음.
+                            if (isUniqueViolation(e)) {
+                                log.debug("Duplicate observation skipped: stationId={}, observedAt={}", stationId, dataTime)
+                            } else {
+                                throw e
+                            }
+                        }
                     }
                     airCurrentRepo.save(
                         AirCurrentEntity(
@@ -397,8 +420,8 @@ class IngestionRunner(
                                 stationId = st.id,
                                 obsTime = "$obsDate $obsTime",
                                 temp = tempC?.toDouble(),
-                                rain = precipMm?.toDouble(),
-                                wind = windSpeed?.toDouble(),
+                                precip = precipMm?.toDouble(),
+                                windSpeed = windSpeed?.toDouble(),
                                 humidity = humidity?.toDouble(),
                                 updatedAt = Instant.now(),
                             ),

@@ -19,11 +19,11 @@ class StationWeatherCurrentEntity(
     @Column(name = "temp")
     var temp: Double? = null,
 
-    @Column(name = "rain")
-    var rain: Double? = null,
+    @Column(name = "precip")
+    var precip: Double? = null,
 
-    @Column(name = "wind")
-    var wind: Double? = null,
+    @Column(name = "wind_speed")
+    var windSpeed: Double? = null,
 
     @Column(name = "humidity")
     var humidity: Double? = null,

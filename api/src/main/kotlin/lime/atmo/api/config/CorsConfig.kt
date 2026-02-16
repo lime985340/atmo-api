@@ -20,7 +20,7 @@ class CorsConfig(
         cfg.allowCredentials = true
 
         val origins = allowedOriginsCsv
-            .split(", ")
+            .split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
 

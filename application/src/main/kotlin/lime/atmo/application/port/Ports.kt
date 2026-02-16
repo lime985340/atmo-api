@@ -8,13 +8,15 @@ import java.util.UUID
 
 data class LocationDto(
     val id: Long,
-    val name: String,
-    val stationId: Long?,
-    val stationName: String?,
+    val description: String,
+    val address: String?,
+    val lat: Double,
+    val lng: Double,
 )
 
 interface LocationPort {
     fun getLocation(locationId: Long): LocationDto?
+    fun findNearestStationId(lat: Double, lng: Double): Long?
 }
 
 interface WeatherReadPort {
@@ -30,17 +32,17 @@ interface AirReadPort {
 
 data class FavoriteLocationDto(
     val id: Long,
-    val name: String,
+    val description: String,
     val lat: Double,
     val lng: Double,
-    val stationId: Long?,
-    val stationName: String?,
+    val address: String?,
 )
 
 interface FavoritePort {
     fun listFavorites(userId: UUID): List<FavoriteLocationDto>
-    fun createFavorite(userId: UUID, name: String, lat: Double, lng: Double): FavoriteLocationDto
+    fun createFavorite(userId: UUID, description: String, lat: Double, lng: Double, address: String?): FavoriteLocationDto
     fun removeFavorite(userId: UUID, favoriteId: Long)
+    fun findNearestStationId(lat: Double, lng: Double): Long?
 }
 
 data class UserInfo(

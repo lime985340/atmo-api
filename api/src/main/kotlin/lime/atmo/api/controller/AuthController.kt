@@ -67,9 +67,9 @@ class AuthController(
                 "refresh_token=${pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
             )
             val redirectUrl = if (returnTo.contains("#")) {
-                "${returnTo}&access_token=${pair.accessToken}"
+                "$returnTo&access_token=${pair.accessToken}"
             } else {
-                "${returnTo}#access_token=${pair.accessToken}"
+                "$returnTo#access_token=${pair.accessToken}"
             }
             return ResponseEntity.status(302).header("Location", redirectUrl).build()
         }
@@ -141,10 +141,18 @@ class AuthController(
     }
 
     @PostMapping("/logout")
-    fun logout(@RequestBody body: RefreshRequest, req: HttpServletRequest): ResponseEntity<Any> {
+    fun logout(
+        @RequestBody body: RefreshRequest,
+        req: HttpServletRequest,
+        res: HttpServletResponse,
+    ): ResponseEntity<Any> {
         val refreshToken = body.refreshToken?.ifBlank { null }
             ?: req.cookies?.firstOrNull { it.name == "refresh_token" }?.value
         if (refreshToken.isNullOrBlank()) {
+            res.addHeader(
+                "Set-Cookie",
+                "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0",
+            )
             return ResponseEntity.ok(mapOf("ok" to true))
         }
 
@@ -153,6 +161,12 @@ class AuthController(
 
         stored.revokedAt = Instant.now()
         refreshRepo.save(stored)
+
+        // Clear cookie on logout (web clients store refresh token only as HttpOnly cookie).
+        res.addHeader(
+            "Set-Cookie",
+            "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0",
+        )
 
         return ResponseEntity.ok(mapOf("ok" to true))
     }

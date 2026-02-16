@@ -18,13 +18,17 @@ class GetDashboardUseCase(
             ?: throw IllegalArgumentException("location not found")
 
         val now = Instant.now()
-        val weatherNow = loc.stationId?.let { weatherReadPort.getWeatherNow(it) }
-        val nextHours = loc.stationId?.let { weatherReadPort.getNextHours(it, now, now.plus(Duration.ofHours(6))) } ?: emptyList()
-        val airNow = loc.stationId?.let { airReadPort.getAirNow(it) }
+
+        // 실시간으로 가장 가까운 측정소 찾기
+        val nearestStationId = locationPort.findNearestStationId(loc.lat, loc.lng)
+
+        val weatherNow = nearestStationId?.let { weatherReadPort.getWeatherNow(it) }
+        val nextHours = nearestStationId?.let { weatherReadPort.getNextHours(it, now, now.plus(Duration.ofHours(6))) } ?: emptyList()
+        val airNow = nearestStationId?.let { airReadPort.getAirNow(it) }
 
         val updatedAt = listOfNotNull(
-            loc.stationId?.let { weatherReadPort.getLatestUpdateTime(it) },
-            loc.stationId?.let { airReadPort.getLatestUpdateTime(it) },
+            nearestStationId?.let { weatherReadPort.getLatestUpdateTime(it) },
+            nearestStationId?.let { airReadPort.getLatestUpdateTime(it) },
         ).maxOrNull() ?: now
 
         val isStale = Duration.between(updatedAt, now) > Duration.ofMinutes(30)
@@ -43,7 +47,7 @@ class GetDashboardUseCase(
 
         return Dashboard(
             loc.id,
-            loc.name,
+            loc.description,
             weatherNow,
             nextHours,
             airNow,

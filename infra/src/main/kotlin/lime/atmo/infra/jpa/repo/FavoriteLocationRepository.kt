@@ -14,6 +14,8 @@ interface FavoriteLocationRepository : JpaRepository<FavoriteLocationEntity, Lon
 
     fun findByIdAndUserIdAndIsActiveTrue(id: Long, userId: UUID): FavoriteLocationEntity?
 
+    fun findFirstByUserIdAndIsActiveTrueAndNxAndNy(userId: UUID, nx: Int, ny: Int): FavoriteLocationEntity?
+
     @Modifying
     @Transactional
     @Query("update FavoriteLocationEntity f set f.isActive=false, f.updatedAt = :updatedAt where f.id=:id and f.userId=:userId and f.isActive=true")
