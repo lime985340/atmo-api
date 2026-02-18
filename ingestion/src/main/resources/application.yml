@@ -9,6 +9,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:${spring.datasource.url:jdbc:postgresql://localhost:5432/app}}
     username: ${SPRING_DATASOURCE_USERNAME:${spring.datasource.username:app}}
     password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
+    hikari:
+      max-lifetime: 580000
+      connection-test-query: SELECT 1
+      validation-timeout: 3000
   jpa:
     hibernate:
       ddl-auto: validate
