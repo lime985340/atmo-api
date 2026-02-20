@@ -276,6 +276,7 @@ class FavoriteDashboardAdapter(
 
             FavoriteDashboardCard(
                 id = f.id,
+                stationId = nearestStationId,
                 description = f.description,
                 lat = f.lat,
                 lng = f.lng,
