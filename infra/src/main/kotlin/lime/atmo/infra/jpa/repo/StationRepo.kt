@@ -59,21 +59,4 @@ interface StationRepo : JpaRepository<StationEntity, Long> {
 
     // Grid(nx, ny)로 측정소 찾기
     fun findByNxAndNyAndIsActiveTrue(nx: Int, ny: Int): List<StationEntity>
-
-    // 주변 Grid 범위로 측정소 찾기
-    @Query(
-        """
-        SELECT s FROM StationEntity s
-        WHERE s.isActive = true
-          AND s.nx BETWEEN :minNx AND :maxNx
-          AND s.ny BETWEEN :minNy AND :maxNy
-          AND s.lat IS NOT NULL AND s.lng IS NOT NULL
-        """,
-    )
-    fun findActiveInGridRange(
-        @Param("minNx") minNx: Int,
-        @Param("maxNx") maxNx: Int,
-        @Param("minNy") minNy: Int,
-        @Param("maxNy") maxNy: Int,
-    ): List<StationEntity>
 }

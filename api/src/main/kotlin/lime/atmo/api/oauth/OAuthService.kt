@@ -1,5 +1,6 @@
 package lime.atmo.api.oauth
 
+import lime.atmo.api.exception.BadRequestException
 import lime.atmo.api.security.JwtService
 import lime.atmo.api.security.TokenHash
 import lime.atmo.application.port.UserPort
@@ -55,13 +56,13 @@ class OAuthService(
         val p = provider(providerKey)
 
         val tokenJson = client.exchangeCodeForToken(p, code).block()
-            ?: throw IllegalStateException("token exchange failed")
+            ?: throw BadRequestException("token exchange failed")
 
         val accessToken = tokenJson["access_token"]?.asText()
-            ?: throw IllegalStateException("access_token missing")
+            ?: throw BadRequestException("access_token missing")
 
         val userJson = client.fetchUserInfo(providerKey, p, accessToken).block()
-            ?: throw IllegalStateException("userinfo failed")
+            ?: throw BadRequestException("userinfo failed")
 
         val (subject, email, name) = mapUser(providerKey, userJson)
         val user = users.findOrCreateByProvider(providerKey.uppercase(), subject, email, name)
@@ -86,7 +87,7 @@ class OAuthService(
     }
 
     private fun provider(key: String) =
-        props.providers[key.lowercase()] ?: throw IllegalArgumentException("unknown provider: $key")
+        props.providers[key.lowercase()] ?: throw BadRequestException("unknown provider: $key")
 
     private fun mapUser(
         providerKey: String,

@@ -1,6 +1,7 @@
 package lime.atmo.infra.cache
 
 import jakarta.annotation.PostConstruct
+import lime.atmo.common.util.GeoUtils
 import lime.atmo.infra.jpa.entity.StationEntity
 import lime.atmo.infra.jpa.repo.StationRepo
 import org.springframework.stereotype.Service
@@ -85,7 +86,7 @@ class StationCacheService(
     fun findNearest(lat: Double, lng: Double): CachedStation? {
         return allActiveStations
             .filter { it.lat != null && it.lng != null }
-            .minByOrNull { haversineKm(lat, lng, it.lat!!, it.lng!!) }
+            .minByOrNull { GeoUtils.haversineKm(lat, lng, it.lat!!, it.lng!!) }
     }
 
     /**
@@ -105,7 +106,7 @@ class StationCacheService(
                     it.lat in minLat..maxLat &&
                     it.lng in minLng..maxLng
             }
-            .minByOrNull { haversineKm(lat, lng, it.lat!!, it.lng!!) }
+            .minByOrNull { GeoUtils.haversineKm(lat, lng, it.lat!!, it.lng!!) }
     }
 
     /**
@@ -119,7 +120,7 @@ class StationCacheService(
         if (sameGrid.isNotEmpty()) {
             return sameGrid
                 .filter { it.lat != null && it.lng != null }
-                .minByOrNull { haversineKm(lat, lng, it.lat!!, it.lng!!) }
+                .minByOrNull { GeoUtils.haversineKm(lat, lng, it.lat!!, it.lng!!) }
         }
 
         // 2. 주변 그리드 검색 (반경 1그리드)
@@ -133,7 +134,7 @@ class StationCacheService(
 
         return nearbyStations
             .filter { it.lat != null && it.lng != null }
-            .minByOrNull { haversineKm(lat, lng, it.lat!!, it.lng!!) }
+            .minByOrNull { GeoUtils.haversineKm(lat, lng, it.lat!!, it.lng!!) }
     }
 
     private fun StationEntity.toCachedStation(): CachedStation =
@@ -147,15 +148,4 @@ class StationCacheService(
             nx = this.nx,
             ny = this.ny,
         )
-
-    private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0088
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return r * c
-    }
 }
