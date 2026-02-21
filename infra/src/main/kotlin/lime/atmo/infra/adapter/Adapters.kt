@@ -1,6 +1,9 @@
 package lime.atmo.infra.adapter
 
 import lime.atmo.application.port.AirReadPort
+import lime.atmo.application.port.FavoriteDashboardCard
+import lime.atmo.application.port.FavoriteDashboardPort
+import lime.atmo.application.port.FavoriteForecastHour
 import lime.atmo.application.port.FavoriteLocationDto
 import lime.atmo.application.port.FavoritePort
 import lime.atmo.application.port.LocationDto
@@ -53,20 +56,6 @@ class LocationAdapter(
 
         // 2. PostGIS 기반 검색 (DB 레벨 최적화)
         return stationRepo.findNearestWithPostGIS(lat, lng, maxDistanceKm = 100.0)?.id
-    }
-
-    /**
-     * Haversine 공식으로 두 지점 간 거리 계산 (km)
-     */
-    private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0088
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return r * c
     }
 }
 
@@ -221,20 +210,6 @@ class FavoriteAdapter(
         // 2. PostGIS 기반 검색 (DB 레벨 최적화)
         return stationRepo.findNearestWithPostGIS(lat, lng, maxDistanceKm = 100.0)?.id
     }
-
-    /**
-     * Haversine 공식으로 두 지점 간 거리 계산 (km)
-     */
-    private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0088
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return r * c
-    }
 }
 
 @Component
@@ -274,4 +249,62 @@ class UserAdapter(
         val saved = repo.save(entity)
         return UserInfo(saved.id, saved.provider, saved.providerSubject, saved.email, saved.name)
     }
+}
+
+@Component
+class FavoriteDashboardAdapter(
+    private val favoritePort: FavoritePort,
+    private val airCurrentRepo: AirCurrentRepo,
+    private val stationWeatherCurrentRepo: StationWeatherCurrentRepo,
+    private val weatherReadPort: WeatherReadPort,
+) : FavoriteDashboardPort {
+
+    override fun getDashboard(userId: UUID): List<FavoriteDashboardCard> {
+        val favs = favoritePort.listFavorites(userId)
+        val now = Instant.now()
+        val forecastUntil = now.plusSeconds(6 * 60 * 60) // 6 hours
+
+        return favs.map { f ->
+            val nearestStationId = favoritePort.findNearestStationId(f.lat, f.lng)
+
+            val air = nearestStationId?.let { airCurrentRepo.findByStationId(it) }
+            val w = nearestStationId?.let { stationWeatherCurrentRepo.findByStationId(it) }
+            val forecast = nearestStationId?.let { weatherReadPort.getNextHours(it, now, forecastUntil) } ?: emptyList()
+
+            val updatedAt = listOfNotNull(air?.dataTime, w?.updatedAt).maxOrNull()
+            val stale = updatedAt?.let { java.time.Duration.between(it, now).toMinutes() > 30 } ?: true
+
+            FavoriteDashboardCard(
+                id = f.id,
+                stationId = nearestStationId,
+                description = f.description,
+                lat = f.lat,
+                lng = f.lng,
+                address = f.address,
+                weatherObsTime = w?.obsTime,
+                tempC = w?.temp?.toFloat(),
+                humidity = w?.humidity?.toFloat(),
+                windSpeed = w?.windSpeed?.toFloat(),
+                precipType = w?.precip?.let { if (it > 0.0) "RAIN" else "NONE" },
+                precipMm = w?.precip?.toFloat(),
+                airDataTime = air?.dataTime,
+                pm10 = air?.pm10,
+                pm25 = air?.pm25,
+                grade = air?.grade,
+                forecastHours = forecast.map { it.toCardDto() },
+                stale = stale,
+            )
+        }
+    }
+
+    private fun WeatherHour.toCardDto() = FavoriteForecastHour(
+        forecastAt = forecastAt,
+        tempC = tempC,
+        humidity = humidity,
+        windSpeed = windSpeed,
+        pop = pop,
+        sky = sky,
+        precipType = precipType,
+        precipMm = precipMm,
+    )
 }

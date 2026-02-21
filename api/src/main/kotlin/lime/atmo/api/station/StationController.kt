@@ -2,6 +2,7 @@ package lime.atmo.api.station
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import lime.atmo.api.exception.NotFoundException
 import lime.atmo.application.port.WeatherReadPort
 import lime.atmo.domain.model.WeatherHour
 import lime.atmo.infra.jpa.repo.AirCurrentRepo
@@ -345,5 +346,3 @@ private fun WeatherHour.toDto() = WeatherForecastDto(
     precipType = precipType,
     precipMm = precipMm,
 )
-
-class NotFoundException(message: String) : RuntimeException(message)
