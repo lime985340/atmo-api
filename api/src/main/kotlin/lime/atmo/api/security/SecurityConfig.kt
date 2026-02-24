@@ -24,6 +24,8 @@ class SecurityConfig(private val jwtService: JwtService) {
             .authorizeHttpRequests {
                 it.requestMatchers(
                     "/actuator/health",
+                    "/actuator/health/**",
+                    "/actuator/prometheus",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
