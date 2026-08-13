@@ -1,11 +1,14 @@
 stages:
   - test
   - docker
+  - gitops
 
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_BUILDKIT: "1"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  GITOPS_BRANCH: "feature/clean-gitops-layout"
+  GITOPS_REPOSITORY: "gitlab.com/lime985340/gitops.git"
 
 .default_docker:
   image: docker:24.0.9
@@ -42,3 +45,45 @@ docker:release:
     - IMAGE_TAG="$CI_COMMIT_TAG"
     - docker build -f docker/Dockerfile -t "$CI_REGISTRY_IMAGE:${IMAGE_TAG}" .
     - docker push "$CI_REGISTRY_IMAGE:${IMAGE_TAG}"
+
+gitops:update-dev:
+  stage: gitops
+  image: alpine:3.20
+  needs:
+    - job: docker:dev
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+  script:
+    - test -n "${GITOPS_PUSH_TOKEN:-}" || (echo "GITOPS_PUSH_TOKEN must be configured" >&2; exit 1)
+    - apk add --no-cache git
+    - git clone --branch "$GITOPS_BRANCH" "https://oauth2:${GITOPS_PUSH_TOKEN}@${GITOPS_REPOSITORY}" gitops
+    - cd gitops
+    - chmod +x ci/update-image-tag.sh
+    - IMAGE_TAG="dev-$(printf '%s' "$CI_COMMIT_SHA" | cut -c1-7)" WORKLOAD=api ENVIRONMENT=dev sh ci/update-image-tag.sh
+    - git config user.name "gitlab-ci[bot]"
+    - git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+    - git add workloads/atmo/api/environments/dev/kustomization.yaml
+    - if git diff --cached --quiet; then echo "GitOps dev tag is already up to date"; exit 0; fi
+    - git commit -m "chore: deploy atmo-api dev ${CI_COMMIT_SHORT_SHA} [skip ci]"
+    - git push origin "$GITOPS_BRANCH"
+
+gitops:update-prod:
+  stage: gitops
+  image: alpine:3.20
+  needs:
+    - job: docker:release
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  script:
+    - test -n "${GITOPS_PUSH_TOKEN:-}" || (echo "GITOPS_PUSH_TOKEN must be configured" >&2; exit 1)
+    - apk add --no-cache git
+    - git clone --branch "$GITOPS_BRANCH" "https://oauth2:${GITOPS_PUSH_TOKEN}@${GITOPS_REPOSITORY}" gitops
+    - cd gitops
+    - chmod +x ci/update-image-tag.sh
+    - IMAGE_TAG="$CI_COMMIT_TAG" WORKLOAD=api ENVIRONMENT=prod sh ci/update-image-tag.sh
+    - git config user.name "gitlab-ci[bot]"
+    - git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+    - git add workloads/atmo/api/environments/prod/kustomization.yaml
+    - if git diff --cached --quiet; then echo "GitOps prod tag is already up to date"; exit 0; fi
+    - git commit -m "chore: deploy atmo-api ${CI_COMMIT_TAG} [skip ci]"
+    - git push origin "$GITOPS_BRANCH"
