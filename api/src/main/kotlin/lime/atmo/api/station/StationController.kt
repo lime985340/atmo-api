@@ -106,11 +106,15 @@ class StationController(
             stationRepo.findAllByIsActiveTrue()
         }
 
+        val stationIds = stations.mapNotNull { it.id }
+        val airByStationId = airCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
+        val weatherByStationId = stationWeatherCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
+
         val stationDtos = stations.mapNotNull { station ->
             val stationId = station.id ?: return@mapNotNull null
 
-            // 대기질 데이터 조회
-            val air = airCurrentRepo.findByStationId(stationId)?.let {
+            // 대기질·날씨는 측정소별 개별 조회 대신 배치 조회 결과를 사용합니다.
+            val air = airByStationId[stationId]?.let {
                 AirDataDto(
                     pm10 = it.pm10,
                     pm25 = it.pm25,
@@ -120,7 +124,7 @@ class StationController(
             }
 
             // 날씨 데이터 조회
-            val weather = stationWeatherCurrentRepo.findByStationId(stationId)?.let {
+            val weather = weatherByStationId[stationId]?.let {
                 WeatherDataDto(
                     temp = it.temp,
                     humidity = it.humidity,
