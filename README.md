@@ -1,4 +1,16 @@
-# 현재 완료상태
+# atmo-api
+
+Atmo 대기질·날씨 API입니다. Spring Controller 내부 경로는 `/api/v1`을
+유지하며, 운영 Ingress에서 외부 경로 `/atmo/api`를 제거한 뒤 전달합니다.
+
+```text
+외부: /atmo/api/v1/stations
+내부: /api/v1/stations
+```
+
+OAuth callback의 외부 주소도 `/atmo/api/v1/auth/oauth/.../callback`을 사용합니다.
+Refresh Cookie Path는 `APP_AUTH_REFRESH_COOKIE_PATH` 환경변수로 설정하며 기본값은
+`/atmo/api/v1/auth/refresh`입니다.
 
 이 문서는 상태 통합으로 간소화되었습니다. 최신 업데이트는 `STATUS.md`만 진행합니다.
 
