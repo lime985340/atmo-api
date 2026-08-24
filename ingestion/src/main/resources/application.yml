@@ -11,9 +11,6 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
     hikari:
       max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:240000}
-      keepalive-time: ${SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME:60000}
-      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:120000}
-      connection-timeout: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT:10000}
       connection-test-query: SELECT 1
       validation-timeout: 3000
   jpa:
