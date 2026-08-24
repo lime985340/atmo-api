@@ -7,6 +7,7 @@ import lime.atmo.api.security.JwtService
 import lime.atmo.api.security.TokenHash
 import lime.atmo.infra.jpa.entity.RefreshTokenEntity
 import lime.atmo.infra.jpa.repo.RefreshTokenRepository
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -31,6 +32,8 @@ class AuthController(
     private val jwt: JwtService,
     private val tokenHash: TokenHash,
     private val refreshRepo: RefreshTokenRepository,
+    @Value("\${app.auth.refresh-cookie-path:/atmo/api/v1/auth/refresh}")
+    private val refreshCookiePath: String,
 ) {
 
     @GetMapping("/oauth/{provider}/authorize-url")
@@ -64,7 +67,7 @@ class AuthController(
         if (returnTo != null) {
             res.addHeader(
                 "Set-Cookie",
-                "refresh_token=${pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
+                "refresh_token=${pair.refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=$refreshCookiePath; Max-Age=${60 * 60 * 24 * 30}",
             )
             val redirectUrl = if (returnTo.contains("#")) {
                 "$returnTo&access_token=${pair.accessToken}"
@@ -131,7 +134,7 @@ class AuthController(
             // Path is restricted to refresh endpoint to reduce exposure.
             res.addHeader(
                 "Set-Cookie",
-                "refresh_token=$newRefresh; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=${60 * 60 * 24 * 30}",
+                "refresh_token=$newRefresh; HttpOnly; Secure; SameSite=Lax; Path=$refreshCookiePath; Max-Age=${60 * 60 * 24 * 30}",
             )
             ResponseEntity.ok(mapOf("accessToken" to access))
         } else {
@@ -151,7 +154,7 @@ class AuthController(
         if (refreshToken.isNullOrBlank()) {
             res.addHeader(
                 "Set-Cookie",
-                "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0",
+                "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=$refreshCookiePath; Max-Age=0",
             )
             return ResponseEntity.ok(mapOf("ok" to true))
         }
@@ -165,7 +168,7 @@ class AuthController(
         // Clear cookie on logout (web clients store refresh token only as HttpOnly cookie).
         res.addHeader(
             "Set-Cookie",
-            "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0",
+            "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=$refreshCookiePath; Max-Age=0",
         )
 
         return ResponseEntity.ok(mapOf("ok" to true))
