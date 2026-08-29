@@ -70,6 +70,8 @@ update_gitops_dev:
   script:
     - |
       set -eu
+      : "${GITOPS_PUSH_TOKEN:?GITOPS_PUSH_TOKEN must be configured in the lime Group}"
+      : "${GITOPS_PUSH_TOKEN_USER:?GITOPS_PUSH_TOKEN_USER must be configured in the lime Group}"
       : "${GITOPS_BRANCH:?GITOPS_BRANCH must be configured in the lime Group}"
       case "$GITOPS_BRANCH" in
         feature/clean-gitops-layout|main) ;;
@@ -108,11 +110,13 @@ update_gitops_prod:
   image: alpine:3.20
   needs: ["promote_release"]
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $GITOPS_PUSH_TOKEN && $GITOPS_PUSH_TOKEN_USER'
     - when: never
   script:
     - |
       set -eu
+      : "${GITOPS_PUSH_TOKEN:?GITOPS_PUSH_TOKEN must be configured in the lime Group}"
+      : "${GITOPS_PUSH_TOKEN_USER:?GITOPS_PUSH_TOKEN_USER must be configured in the lime Group}"
       : "${GITOPS_BRANCH:?GITOPS_BRANCH must be configured in the lime Group}"
       case "$GITOPS_BRANCH" in
         feature/clean-gitops-layout|main) ;;
