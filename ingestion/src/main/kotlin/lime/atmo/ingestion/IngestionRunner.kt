@@ -27,6 +27,7 @@ import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import java.sql.SQLException
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -134,6 +135,7 @@ class IngestionRunner(
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono(Map::class.java)
+                    .timeout(Duration.ofSeconds(30))
                     .block()
 
                 val items = (((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? List<*>) ?: emptyList<Any>()
@@ -237,6 +239,7 @@ class IngestionRunner(
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono(Map::class.java)
+                    .timeout(Duration.ofSeconds(30))
                     .block()
 
                 val items = (((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? List<*>) ?: emptyList<Any>()
@@ -359,6 +362,7 @@ class IngestionRunner(
             for ((grid, gridStations) in stationsByGrid) {
                 val nx = grid.nx
                 val ny = grid.ny
+                var requestSucceeded = false
                 try {
                     val res = KmaRetry.call(
                         log = log,
@@ -380,9 +384,11 @@ class IngestionRunner(
                             .accept(MediaType.APPLICATION_JSON)
                             .retrieve()
                             .bodyToMono(Map::class.java)
+                            .timeout(Duration.ofSeconds(30))
                             .block()
                     }
                     kmaCallOk++
+                    requestSucceeded = true
 
                     val items = (
                         ((((res?.get("response") as? Map<*, *>)?.get("body") as? Map<*, *>)?.get("items") as? Map<*, *>)?.get("item") as? List<*>)
@@ -400,20 +406,17 @@ class IngestionRunner(
                     val precipMm = byCat["RN1"]?.get("obsrValue")?.toString()?.toFloatOrNull()
 
                     for (st in gridStations) {
-                        val existingObs = st.id?.let { weatherObservationRepo.findByStationIdAndObservedAt(it, obsInstant) }
-                        if (existingObs == null && st.id != null) {
-                            weatherObservationRepo.save(
-                                WeatherObservationEntity(
-                                    stationId = st.id!!,
-                                    observedAt = obsInstant,
-                                    temp = tempC,
-                                    humidity = humidity,
-                                    windSpeed = windSpeed,
-                                    precip = precipMm,
-                                    createdAt = Instant.now(),
-                                ),
+                        val stationId = st.id
+                        if (stationId != null) {
+                            obsInserted += weatherObservationRepo.insertIfAbsent(
+                                stationId = stationId,
+                                observedAt = obsInstant,
+                                temp = tempC,
+                                humidity = humidity,
+                                windSpeed = windSpeed,
+                                precip = precipMm,
+                                createdAt = Instant.now(),
                             )
-                            obsInserted++
                         }
                         stationWeatherCurrentRepo.save(
                             StationWeatherCurrentEntity(
@@ -429,10 +432,10 @@ class IngestionRunner(
                         okStations++
                     }
                 } catch (e: Exception) {
-                    kmaCallFail++
+                    if (!requestSucceeded) kmaCallFail++
                     failStations += gridStations.size
                     lastErr = e.message
-                    log.error("KMA ncst fetch failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
+                    log.error("Weather grid processing failed for nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
                 }
             }
 
@@ -474,8 +477,7 @@ class IngestionRunner(
         val run = runRepo.save(IngestionRunEntity(jobType = "FORECAST", status = "SUCCESS"))
         val started = Instant.now()
         var okRows = 0
-        var insertedRows = 0
-        var updatedRows = 0
+        var upsertedRows = 0
         var failStations = 0
         var kmaCallOk = 0
         var kmaCallFail = 0
@@ -512,9 +514,17 @@ class IngestionRunner(
             for ((grid, gridStations) in stationsByGrid) {
                 val nx = grid.nx
                 val ny = grid.ny
+                val items = try {
+                    forecastClient.fetchUltraSrtFcst(nx, ny, base.baseDate, base.baseTime)
+                } catch (e: Exception) {
+                    kmaCallFail++
+                    failStations += gridStations.size
+                    lastErr = e.message
+                    log.error("KMA forecast request failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
+                    continue
+                }
+                kmaCallOk++
                 try {
-                    val items = forecastClient.fetchUltraSrtFcst(nx, ny, base.baseDate, base.baseTime)
-                    kmaCallOk++
                     if (items.isEmpty()) {
                         continue
                     }
@@ -538,42 +548,26 @@ class IngestionRunner(
                     for (st in gridStations) {
                         if (st.id == null) continue
                         for (row in rows) {
-                            val existing = weatherForecastRepo.findOne(st.id!!, row.whenAt)
-                            if (existing == null) {
-                                weatherForecastRepo.save(
-                                    WeatherForecastEntity(
-                                        stationId = st.id!!,
-                                        forecastAt = row.whenAt,
-                                        temp = row.temp,
-                                        humidity = row.humidity,
-                                        windSpeed = row.wind,
-                                        pop = row.pop,
-                                        sky = row.sky,
-                                        precipType = row.precipType,
-                                        precipMm = row.precipMm,
-                                        createdAt = Instant.now(),
-                                    ),
-                                )
-                                insertedRows++
-                            } else {
-                                existing.temp = row.temp
-                                existing.humidity = row.humidity
-                                existing.windSpeed = row.wind
-                                existing.pop = row.pop
-                                existing.sky = row.sky
-                                existing.precipType = row.precipType
-                                existing.precipMm = row.precipMm
-                                weatherForecastRepo.save(existing)
-                                updatedRows++
-                            }
+                            weatherForecastRepo.upsert(
+                                stationId = st.id!!,
+                                forecastAt = row.whenAt,
+                                temp = row.temp,
+                                humidity = row.humidity,
+                                windSpeed = row.wind,
+                                pop = row.pop,
+                                sky = row.sky,
+                                precipType = row.precipType,
+                                precipMm = row.precipMm,
+                                createdAt = Instant.now(),
+                            )
+                            upsertedRows++
                             okRows++
                         }
                     }
                 } catch (e: Exception) {
-                    kmaCallFail++
                     failStations += gridStations.size
                     lastErr = e.message
-                    log.error("KMA forecast fetch failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
+                    log.error("Forecast persistence failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
                 }
             }
 
@@ -582,14 +576,13 @@ class IngestionRunner(
             }
 
             log.info(
-                "FORECAST done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, rowsWritten={}, inserted={}, updated={}, missingCoords={}",
+                "FORECAST done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, rowsWritten={}, upserted={}, missingCoords={}",
                 stations.size,
                 stationsByGrid.size,
                 kmaCallOk,
                 kmaCallFail,
                 okRows,
-                insertedRows,
-                updatedRows,
+                upsertedRows,
                 missingCoords,
             )
         } catch (e: Exception) {

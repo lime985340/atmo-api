@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
+import java.time.Duration
 
 data class KmaFcstItem(
     val category: String,
@@ -51,6 +52,7 @@ class WebKmaForecastClient(
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToMono(Map::class.java)
+                .timeout(Duration.ofSeconds(30))
                 .block()
         }
 
