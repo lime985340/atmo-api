@@ -558,14 +558,21 @@ class IngestionRunner(
                     }
 
                     for (st in gridStations) {
-                        if (st.id == null) continue
+                        val stationId = st.id ?: continue
+                        val existingByForecastAt = weatherForecastRepo
+                            .findByStationIdAndForecastAtBetweenOrderByForecastAt(
+                                stationId,
+                                rows.minOf { it.whenAt },
+                                rows.maxOf { it.whenAt },
+                            )
+                            .associateBy { it.forecastAt }
                         for (row in rows) {
-                            val existing = weatherForecastRepo.findOne(st.id!!, row.whenAt)
+                            val existing = existingByForecastAt[row.whenAt]
                             if (existing == null) {
                                 try {
                                     weatherForecastRepo.save(
                                         WeatherForecastEntity(
-                                            stationId = st.id!!,
+                                            stationId = stationId,
                                             forecastAt = row.whenAt,
                                             temp = row.temp,
                                             humidity = row.humidity,
@@ -580,7 +587,7 @@ class IngestionRunner(
                                     insertedRows++
                                 } catch (e: DataIntegrityViolationException) {
                                     if (!isUniqueViolation(e)) throw e
-                                    val raced = weatherForecastRepo.findOne(st.id!!, row.whenAt) ?: throw e
+                                    val raced = weatherForecastRepo.findOne(stationId, row.whenAt) ?: throw e
                                     raced.temp = row.temp
                                     raced.humidity = row.humidity
                                     raced.windSpeed = row.wind
