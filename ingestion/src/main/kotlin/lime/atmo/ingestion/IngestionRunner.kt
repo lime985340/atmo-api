@@ -407,16 +407,27 @@ class IngestionRunner(
 
                     for (st in gridStations) {
                         val stationId = st.id
-                        if (stationId != null) {
-                            obsInserted += weatherObservationRepo.insertIfAbsent(
-                                stationId = stationId,
-                                observedAt = obsInstant,
-                                temp = tempC,
-                                humidity = humidity,
-                                windSpeed = windSpeed,
-                                precip = precipMm,
-                                createdAt = Instant.now(),
-                            )
+                        if (stationId != null && weatherObservationRepo.findByStationIdAndObservedAt(stationId, obsInstant) == null) {
+                            try {
+                                weatherObservationRepo.save(
+                                    WeatherObservationEntity(
+                                        stationId = stationId,
+                                        observedAt = obsInstant,
+                                        temp = tempC,
+                                        humidity = humidity,
+                                        windSpeed = windSpeed,
+                                        precip = precipMm,
+                                        createdAt = Instant.now(),
+                                    ),
+                                )
+                                obsInserted++
+                            } catch (e: DataIntegrityViolationException) {
+                                if (isUniqueViolation(e)) {
+                                    log.debug("Duplicate weather observation skipped: stationId={}, observedAt={}", stationId, obsInstant)
+                                } else {
+                                    throw e
+                                }
+                            }
                         }
                         stationWeatherCurrentRepo.save(
                             StationWeatherCurrentEntity(
@@ -477,7 +488,8 @@ class IngestionRunner(
         val run = runRepo.save(IngestionRunEntity(jobType = "FORECAST", status = "SUCCESS"))
         val started = Instant.now()
         var okRows = 0
-        var upsertedRows = 0
+        var insertedRows = 0
+        var updatedRows = 0
         var failStations = 0
         var kmaCallOk = 0
         var kmaCallFail = 0
@@ -548,19 +560,48 @@ class IngestionRunner(
                     for (st in gridStations) {
                         if (st.id == null) continue
                         for (row in rows) {
-                            weatherForecastRepo.upsert(
-                                stationId = st.id!!,
-                                forecastAt = row.whenAt,
-                                temp = row.temp,
-                                humidity = row.humidity,
-                                windSpeed = row.wind,
-                                pop = row.pop,
-                                sky = row.sky,
-                                precipType = row.precipType,
-                                precipMm = row.precipMm,
-                                createdAt = Instant.now(),
-                            )
-                            upsertedRows++
+                            val existing = weatherForecastRepo.findOne(st.id!!, row.whenAt)
+                            if (existing == null) {
+                                try {
+                                    weatherForecastRepo.save(
+                                        WeatherForecastEntity(
+                                            stationId = st.id!!,
+                                            forecastAt = row.whenAt,
+                                            temp = row.temp,
+                                            humidity = row.humidity,
+                                            windSpeed = row.wind,
+                                            pop = row.pop,
+                                            sky = row.sky,
+                                            precipType = row.precipType,
+                                            precipMm = row.precipMm,
+                                            createdAt = Instant.now(),
+                                        ),
+                                    )
+                                    insertedRows++
+                                } catch (e: DataIntegrityViolationException) {
+                                    if (!isUniqueViolation(e)) throw e
+                                    val raced = weatherForecastRepo.findOne(st.id!!, row.whenAt) ?: throw e
+                                    raced.temp = row.temp
+                                    raced.humidity = row.humidity
+                                    raced.windSpeed = row.wind
+                                    raced.pop = row.pop
+                                    raced.sky = row.sky
+                                    raced.precipType = row.precipType
+                                    raced.precipMm = row.precipMm
+                                    weatherForecastRepo.save(raced)
+                                    updatedRows++
+                                }
+                            } else {
+                                existing.temp = row.temp
+                                existing.humidity = row.humidity
+                                existing.windSpeed = row.wind
+                                existing.pop = row.pop
+                                existing.sky = row.sky
+                                existing.precipType = row.precipType
+                                existing.precipMm = row.precipMm
+                                weatherForecastRepo.save(existing)
+                                updatedRows++
+                            }
                             okRows++
                         }
                     }
@@ -576,13 +617,14 @@ class IngestionRunner(
             }
 
             log.info(
-                "FORECAST done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, rowsWritten={}, upserted={}, missingCoords={}",
+                "FORECAST done: stations={}, uniqueGrids={}, kmaCallsOk={}, kmaCallsFail={}, rowsWritten={}, inserted={}, updated={}, missingCoords={}",
                 stations.size,
                 stationsByGrid.size,
                 kmaCallOk,
                 kmaCallFail,
                 okRows,
-                upsertedRows,
+                insertedRows,
+                updatedRows,
                 missingCoords,
             )
         } catch (e: Exception) {

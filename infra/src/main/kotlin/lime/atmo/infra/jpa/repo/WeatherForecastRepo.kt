@@ -26,41 +26,6 @@ interface WeatherForecastRepo : JpaRepository<WeatherForecastEntity, Long> {
 
     @Modifying
     @Transactional
-    @Query(
-        value = """
-            insert into weather_forecasts (
-                station_id, forecast_at, temp, humidity, wind_speed, pop, sky,
-                precip_type, precip_mm, created_at
-            ) values (
-                :stationId, :forecastAt, :temp, :humidity, :windSpeed, :pop, :sky,
-                :precipType, :precipMm, :createdAt
-            )
-            on conflict (station_id, forecast_at) do update set
-                temp = excluded.temp,
-                humidity = excluded.humidity,
-                wind_speed = excluded.wind_speed,
-                pop = excluded.pop,
-                sky = excluded.sky,
-                precip_type = excluded.precip_type,
-                precip_mm = excluded.precip_mm
-        """,
-        nativeQuery = true,
-    )
-    fun upsert(
-        @Param("stationId") stationId: Long,
-        @Param("forecastAt") forecastAt: Instant,
-        @Param("temp") temp: Float?,
-        @Param("humidity") humidity: Float?,
-        @Param("windSpeed") windSpeed: Float?,
-        @Param("pop") pop: Float?,
-        @Param("sky") sky: String?,
-        @Param("precipType") precipType: String?,
-        @Param("precipMm") precipMm: Float?,
-        @Param("createdAt") createdAt: Instant,
-    ): Int
-
-    @Modifying
-    @Transactional
     @Query("delete from WeatherForecastEntity w where w.forecastAt < :cutoff")
     fun deleteBefore(@Param("cutoff") cutoff: Instant): Int
 }
