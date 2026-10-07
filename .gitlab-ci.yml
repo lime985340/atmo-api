@@ -8,7 +8,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_BUILDKIT: "1"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
-  GITOPS_REPOSITORY: "gitlab.com/lime985340/gitops.git"
+  GITOPS_REPOSITORY: "gitlab.com/lime985340/platform-gitops.git"
 
 .default_docker:
   image: docker:27.5.1-cli
@@ -50,14 +50,17 @@ promote_release:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - |
+      set -eu
       source_tag="$CI_COMMIT_SHA"
       release_tag="$CI_COMMIT_TAG"
-      docker buildx imagetools inspect "$CI_REGISTRY_IMAGE:$source_tag" --format '{{.Manifest.Digest}}'
+      source_digest="$(docker buildx imagetools inspect "$CI_REGISTRY_IMAGE:$source_tag" | awk '$1 == "Digest:" { print $2; exit }')"
+      test -n "$source_digest"
       docker buildx imagetools create --prefer-index=false \
         --tag "$CI_REGISTRY_IMAGE:$release_tag" \
         "$CI_REGISTRY_IMAGE:$source_tag"
-      source_digest="$(docker buildx imagetools inspect "$CI_REGISTRY_IMAGE:$source_tag" --format '{{.Manifest.Digest}}')"
-      release_digest="$(docker buildx imagetools inspect "$CI_REGISTRY_IMAGE:$release_tag" --format '{{.Manifest.Digest}}')"
+      release_digest="$(docker buildx imagetools inspect "$CI_REGISTRY_IMAGE:$release_tag" | awk '$1 == "Digest:" { print $2; exit }')"
+      printf 'Source digest: %s\nRelease digest: %s\n' "$source_digest" "$release_digest"
+      test -n "$release_digest"
       test "$source_digest" = "$release_digest"
 
 update_gitops_dev:
@@ -72,11 +75,8 @@ update_gitops_dev:
       set -eu
       : "${GITOPS_PUSH_TOKEN:?GITOPS_PUSH_TOKEN must be configured in the lime Group}"
       : "${GITOPS_PUSH_TOKEN_USER:?GITOPS_PUSH_TOKEN_USER must be configured in the lime Group}"
-      : "${GITOPS_BRANCH:?GITOPS_BRANCH must be configured in the lime Group}"
-      case "$GITOPS_BRANCH" in
-        feature/clean-gitops-layout|main) ;;
-        *) echo "Unsupported GitOps branch: $GITOPS_BRANCH" >&2; exit 1 ;;
-      esac
+      target_branch="main"
+      deploy_branch="codex/deploy-atmo-api-dev-$CI_PIPELINE_ID"
       apk add --no-cache git
       askpass_file="$(mktemp)"
       cleanup() { rm -f "$askpass_file"; }
@@ -97,15 +97,22 @@ update_gitops_dev:
       for attempt in 1 2 3; do
         rm -rf gitops
         git -c credential.helper= -c http.followRedirects=false \
-          clone --branch "$GITOPS_BRANCH" "https://${GITOPS_REPOSITORY}" gitops
+          clone --branch "$target_branch" "https://${GITOPS_REPOSITORY}" gitops
         cd gitops
+        git switch -c "$deploy_branch"
         APPLICATION=atmo IMAGE_TAG="$CI_COMMIT_SHA" WORKLOAD=api ENVIRONMENT=dev sh ci/update-image-tag.sh
         git config user.name "gitlab-ci[bot]"
         git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
         git add workloads/atmo/api/environments/dev/kustomization.yaml
         if git diff --cached --quiet; then echo "GitOps tag is already up to date"; exit 0; fi
         git commit -m "chore: deploy atmo-api dev $CI_COMMIT_SHA"
-        if git -c credential.helper= -c http.followRedirects=false push origin "HEAD:$GITOPS_BRANCH"; then
+        if git -c credential.helper= -c http.followRedirects=false push \
+          -o merge_request.create \
+          -o "merge_request.target=$target_branch" \
+          -o "merge_request.title=deploy: Atmo API dev $CI_COMMIT_SHORT_SHA" \
+          -o "merge_request.description=Deploy Atmo API image $CI_COMMIT_SHA to dev." \
+          -o merge_request.auto_merge \
+          origin "HEAD:$deploy_branch"; then
           exit 0
         fi
         cd ..
@@ -126,11 +133,8 @@ update_gitops_prod:
       set -eu
       : "${GITOPS_PUSH_TOKEN:?GITOPS_PUSH_TOKEN must be configured in the lime Group}"
       : "${GITOPS_PUSH_TOKEN_USER:?GITOPS_PUSH_TOKEN_USER must be configured in the lime Group}"
-      : "${GITOPS_BRANCH:?GITOPS_BRANCH must be configured in the lime Group}"
-      case "$GITOPS_BRANCH" in
-        feature/clean-gitops-layout|main) ;;
-        *) echo "Unsupported GitOps branch: $GITOPS_BRANCH" >&2; exit 1 ;;
-      esac
+      target_branch="main"
+      deploy_branch="codex/deploy-atmo-api-prod-$CI_PIPELINE_ID"
       apk add --no-cache git
       askpass_file="$(mktemp)"
       cleanup() { rm -f "$askpass_file"; }
@@ -151,15 +155,22 @@ update_gitops_prod:
       for attempt in 1 2 3; do
         rm -rf gitops
         git -c credential.helper= -c http.followRedirects=false \
-          clone --branch "$GITOPS_BRANCH" "https://${GITOPS_REPOSITORY}" gitops
+          clone --branch "$target_branch" "https://${GITOPS_REPOSITORY}" gitops
         cd gitops
+        git switch -c "$deploy_branch"
         APPLICATION=atmo IMAGE_TAG="$CI_COMMIT_TAG" WORKLOAD=api ENVIRONMENT=prod sh ci/update-image-tag.sh
         git config user.name "gitlab-ci[bot]"
         git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
         git add workloads/atmo/api/environments/prod/kustomization.yaml
         if git diff --cached --quiet; then echo "GitOps tag is already up to date"; exit 0; fi
         git commit -m "chore: release atmo-api $CI_COMMIT_TAG"
-        if git -c credential.helper= -c http.followRedirects=false push origin "HEAD:$GITOPS_BRANCH"; then
+        if git -c credential.helper= -c http.followRedirects=false push \
+          -o merge_request.create \
+          -o "merge_request.target=$target_branch" \
+          -o "merge_request.title=deploy: Atmo API prod $CI_COMMIT_TAG" \
+          -o "merge_request.description=Deploy Atmo API image $CI_COMMIT_TAG to prod." \
+          -o merge_request.auto_merge \
+          origin "HEAD:$deploy_branch"; then
           exit 0
         fi
         cd ..
