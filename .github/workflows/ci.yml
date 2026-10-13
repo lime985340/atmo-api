@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    container: gradle:8.10-jdk17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gradle tests
+        run: gradle test --no-daemon
