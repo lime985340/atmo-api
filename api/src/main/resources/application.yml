@@ -40,6 +40,15 @@ management:
       probes:
         enabled: true
 
+atmo:
+  cache:
+    public:
+      # The ingestion cadence is daily in production and weekly in dev. Six hours avoids
+      # per-request Neon wakeups while keeping public observations reasonably fresh.
+      fresh-seconds: ${ATMO_CACHE_PUBLIC_FRESH_SECONDS:21600}
+      # Serve the last good public snapshot during Neon scale-to-zero or a temporary DB outage.
+      retain-seconds: ${ATMO_CACHE_PUBLIC_RETAIN_SECONDS:1209600}
+
 app:
   cors:
     # Keep local and Quick Tunnel development origins in CorsConfig defaults.

@@ -1,16 +1,11 @@
 package lime.atmo.api.station
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
 import lime.atmo.api.exception.NotFoundException
 import lime.atmo.application.port.WeatherReadPort
 import lime.atmo.domain.model.WeatherHour
 import lime.atmo.infra.jpa.repo.AirCurrentRepo
 import lime.atmo.infra.jpa.repo.StationRepo
 import lime.atmo.infra.jpa.repo.StationWeatherCurrentRepo
-import org.slf4j.LoggerFactory
-import org.springframework.data.redis.RedisConnectionFailureException
-import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -19,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.Duration
 import java.time.Instant
-import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
@@ -35,33 +29,8 @@ class StationController(
     private val airCurrentRepo: AirCurrentRepo,
     private val stationWeatherCurrentRepo: StationWeatherCurrentRepo,
     private val weatherReadPort: WeatherReadPort,
-    private val redis: StringRedisTemplate,
-    private val objectMapper: ObjectMapper,
+    private val stationSnapshot: PublicStationSnapshotService,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    private fun normCoord(value: Double): String = String.format(Locale.US, "%.4f", value)
-
-    private fun bboxCacheKey(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, limit: Int): String =
-        "stations:bbox:${normCoord(minLat)},${normCoord(minLng)},${normCoord(maxLat)},${normCoord(maxLng)}:limit=$limit"
-
-    private fun readCachedStations(key: String): BboxStationsResponse? {
-        val raw = try {
-            redis.opsForValue().get(key)
-        } catch (e: RedisConnectionFailureException) {
-            log.warn("Redis read failed for key={}, bypassing cache", key, e)
-            null
-        }
-        return raw?.let { objectMapper.readValue(it, object : TypeReference<BboxStationsResponse>() {}) }
-    }
-
-    private fun writeCachedStations(key: String, value: BboxStationsResponse) {
-        try {
-            redis.opsForValue().set(key, objectMapper.writeValueAsString(value), Duration.ofSeconds(20))
-        } catch (e: RedisConnectionFailureException) {
-            log.warn("Redis write failed for key={}, returning uncached response", key, e)
-        }
-    }
 
     /**
      * 모든 활성 측정소 목록 조회 (대기질 + 날씨 데이터 포함)
@@ -100,54 +69,8 @@ class StationController(
     fun getAllStations(
         @RequestParam(required = false) sido: String?,
     ): StationsResponse {
-        val stations = if (sido != null) {
-            stationRepo.findAllByIsActiveTrueAndSido(sido)
-        } else {
-            stationRepo.findAllByIsActiveTrue()
-        }
-
-        val stationIds = stations.mapNotNull { it.id }
-        val airByStationId = airCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
-        val weatherByStationId = stationWeatherCurrentRepo.findAllByStationIdIn(stationIds).associateBy { it.stationId }
-
-        val stationDtos = stations.mapNotNull { station ->
-            val stationId = station.id ?: return@mapNotNull null
-
-            // 대기질·날씨는 측정소별 개별 조회 대신 배치 조회 결과를 사용합니다.
-            val air = airByStationId[stationId]?.let {
-                AirDataDto(
-                    pm10 = it.pm10,
-                    pm25 = it.pm25,
-                    grade = it.grade,
-                    dataTime = it.dataTime,
-                )
-            }
-
-            // 날씨 데이터 조회
-            val weather = weatherByStationId[stationId]?.let {
-                WeatherDataDto(
-                    temp = it.temp,
-                    humidity = it.humidity,
-                    windSpeed = it.windSpeed,
-                    precip = it.precip,
-                    obsTime = it.obsTime,
-                )
-            }
-
-            StationDto(
-                id = stationId,
-                name = station.stationName,
-                addr = station.addr,
-                sido = station.sido,
-                regionCode = station.regionCode,
-                lat = station.lat,
-                lng = station.lng,
-                air = air,
-                weather = weather,
-            )
-        }
-
-        return StationsResponse(stations = stationDtos)
+        val stations = stationSnapshot.get().value.stations
+        return StationsResponse(stations = if (sido == null) stations else stations.filter { it.sido == sido })
     }
 
     /**
@@ -158,6 +81,10 @@ class StationController(
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     fun getStation(@PathVariable id: Long): StationDto {
+        stationSnapshot.get().value.stations.firstOrNull { it.id == id }?.let { return it }
+
+        // Preserve the existing behavior for inactive stations, which are intentionally not
+        // included in the shared public snapshot.
         val station = stationRepo.findById(id).orElseThrow {
             NotFoundException("Station not found: $id")
         }
@@ -181,6 +108,7 @@ class StationController(
                     windSpeed = it.windSpeed,
                     precip = it.precip,
                     obsTime = it.obsTime,
+                    updatedAt = it.updatedAt,
                 )
             }
         }
@@ -251,35 +179,26 @@ class StationController(
         val minLng = min(swLng, neLng)
         val maxLng = max(swLng, neLng)
         val safeLimit = limit.coerceAtLeast(1)
-        val cacheKey = bboxCacheKey(minLat, minLng, maxLat, maxLng, safeLimit)
-        val cached = readCachedStations(cacheKey)
-
-        return try {
-            val stations = stationRepo.findActiveInBbox(minLat, maxLat, minLng, maxLng)
-            val stationDtos = stations.mapNotNull { station ->
-                val stationId = station.id ?: return@mapNotNull null
-                val lat = station.lat ?: return@mapNotNull null
-                val lng = station.lng ?: return@mapNotNull null
+        val stationDtos = stationSnapshot.get().value.stations.asSequence()
+            .filter { station ->
+                val lat = station.lat ?: return@filter false
+                val lng = station.lng ?: return@filter false
+                lat in minLat..maxLat && lng in minLng..maxLng
+            }
+            .take(safeLimit)
+            .map { station ->
                 BboxStationDto(
-                    id = stationId,
-                    name = station.stationName,
+                    id = station.id,
+                    name = station.name,
                     addr = station.addr,
                     sido = station.sido,
                     regionCode = station.regionCode,
-                    lat = lat,
-                    lng = lng,
+                    lat = station.lat!!,
+                    lng = station.lng!!,
                 )
             }
-            val trimmed = stationDtos.take(safeLimit)
-            BboxStationsResponse(stations = trimmed).also { writeCachedStations(cacheKey, it) }
-        } catch (e: Exception) {
-            if (cached != null) {
-                log.warn("BBox DB read failed; serving cached response for key={}", cacheKey, e)
-                cached
-            } else {
-                throw e
-            }
-        }
+            .toList()
+        return BboxStationsResponse(stations = stationDtos)
     }
 }
 
@@ -327,6 +246,7 @@ data class WeatherDataDto(
     val windSpeed: Double?,
     val precip: Double?,
     val obsTime: String?,
+    val updatedAt: Instant? = null,
 )
 
 data class WeatherForecastDto(
