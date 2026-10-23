@@ -11,7 +11,9 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:${spring.datasource.username:app}}
     password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
     hikari:
-      max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:240000}
+      max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:1800000}
+      minimum-idle: 0
+      idle-timeout: 60000
       connection-test-query: SELECT 1
       validation-timeout: 3000
   jpa:
@@ -37,6 +39,15 @@ management:
     health:
       probes:
         enabled: true
+
+atmo:
+  cache:
+    public:
+      # The ingestion cadence is daily in production and weekly in dev. Six hours avoids
+      # per-request Neon wakeups while keeping public observations reasonably fresh.
+      fresh-seconds: ${ATMO_CACHE_PUBLIC_FRESH_SECONDS:21600}
+      # Serve the last good public snapshot during Neon scale-to-zero or a temporary DB outage.
+      retain-seconds: ${ATMO_CACHE_PUBLIC_RETAIN_SECONDS:1209600}
 
 app:
   cors:
