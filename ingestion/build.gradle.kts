@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":application"))
     implementation(project(":infra"))
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
     // Flyway 10 is modular: PostgreSQL support lives in a separate module.
     // Neon is PostgreSQL 17.x, so pin Flyway to a version that recognizes PG 17.
     implementation("org.flywaydb:flyway-core:10.20.1")

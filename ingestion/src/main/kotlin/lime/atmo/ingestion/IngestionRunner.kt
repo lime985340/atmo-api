@@ -197,6 +197,7 @@ class IngestionRunner(
             log.error("station seed failed", e)
             fail++
             lastErr = e.message
+            if (TransientDatabaseConnectionFailure.matches(e)) throw e
         } finally {
             run.status = if (fail > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
@@ -314,6 +315,7 @@ class IngestionRunner(
             log.error("air ingestion failed", e)
             fail++
             lastErr = e.message
+            if (TransientDatabaseConnectionFailure.matches(e)) throw e
         } finally {
             run.status = if (fail > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
@@ -443,6 +445,7 @@ class IngestionRunner(
                         okStations++
                     }
                 } catch (e: Exception) {
+                    if (TransientDatabaseConnectionFailure.matches(e)) throw e
                     if (!requestSucceeded) kmaCallFail++
                     failStations += gridStations.size
                     lastErr = e.message
@@ -467,6 +470,7 @@ class IngestionRunner(
             log.error("weather ingestion failed", e)
             failStations++
             lastErr = e.message
+            if (TransientDatabaseConnectionFailure.matches(e)) throw e
         } finally {
             run.status = if (failStations > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
@@ -613,6 +617,7 @@ class IngestionRunner(
                         }
                     }
                 } catch (e: Exception) {
+                    if (TransientDatabaseConnectionFailure.matches(e)) throw e
                     failStations += gridStations.size
                     lastErr = e.message
                     log.error("Forecast persistence failed for grid nx={}, ny={} (stations={})", nx, ny, gridStations.size, e)
@@ -638,6 +643,7 @@ class IngestionRunner(
             log.error("forecast ingestion failed", e)
             failStations++
             lastErr = e.message
+            if (TransientDatabaseConnectionFailure.matches(e)) throw e
         } finally {
             run.status = if (failStations > 0) "FAILED" else "SUCCESS"
             run.startedAt = started
