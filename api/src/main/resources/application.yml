@@ -11,9 +11,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:${spring.datasource.username:app}}
     password: ${SPRING_DATASOURCE_PASSWORD:${spring.datasource.password:app}}
     hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:3}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:0}
+      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:60000}
       max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:1800000}
-      minimum-idle: 0
-      idle-timeout: 60000
       connection-test-query: SELECT 1
       validation-timeout: 3000
   jpa:
