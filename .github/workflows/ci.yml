@@ -17,18 +17,70 @@ on:
         required: false
         type: boolean
         default: false
+      oci_multiarch:
+        description: "Publish a multiarch image for OCI Osaka without running verify tasks"
+        required: false
+        type: boolean
+        default: false
+      oci_source_ref:
+        description: "Branch, tag, or commit to package"
+        required: false
+        type: string
+        default: main
+      oci_environment:
+        description: "Application build profile"
+        required: false
+        type: choice
+        options: [dev, prod]
+        default: dev
+      oci_image_tag:
+        description: "Destination OCI image tag"
+        required: false
+        type: string
+        default: oci-manual
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.oci_multiarch == true) }}
     runs-on: ubuntu-latest
     container: gradle:8.10-jdk17
     steps:
       - uses: actions/checkout@v4
       - name: Run Gradle tests
         run: gradle test --no-daemon
+
+  publish-oci-multiarch:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.oci_multiarch == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.oci_source_ref }}
+      - id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish OCI multiarch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/lime985340/atmo-api:${{ inputs.oci_image_tag }}
 
   publish-ghcr:
     if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
