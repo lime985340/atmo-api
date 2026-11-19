@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets
 
 class OAuthServiceAuthorizeUrlTest {
     @Test
-    fun `kakao authorize url requests only the permitted profile scope`() {
+    fun `kakao authorize url excludes unconfigured account email scope`() {
         val service = OAuthService(
             props = OAuthProps(
                 providers = mapOf(
@@ -22,7 +22,7 @@ class OAuthServiceAuthorizeUrlTest {
                         clientSecret = "test-secret",
                         redirectUri = "https://example.test/dev/atmo/api/v1/auth/oauth/kakao/callback",
                         authUri = "https://kauth.kakao.com/oauth/authorize",
-                        scope = "profile_nickname",
+                        scope = "profile_nickname,account_email",
                     ),
                 ),
             ),
