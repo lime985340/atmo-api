@@ -40,8 +40,13 @@ class OAuthService(
             append("?response_type=code")
             append("&client_id=").append(enc(p.clientId))
             append("&redirect_uri=").append(enc(p.redirectUri))
-            if (p.scope.isNotBlank()) {
-                append("&scope=").append(enc(p.scope))
+            val requestedScopes = p.scope.split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .filterNot { providerKey.equals("kakao", ignoreCase = true) && it == "account_email" }
+                .joinToString(",")
+            if (requestedScopes.isNotBlank()) {
+                append("&scope=").append(enc(requestedScopes))
             }
             append("&state=").append(enc(state))
         }
